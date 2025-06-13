@@ -1,3 +1,24 @@
+// 스크립트 로더
+function loadScript(src) {
+    return new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = src;
+        script.onload = () => resolve(script);
+        script.onerror = () => reject(new Error(`Script load error for ${src}`));
+        document.head.append(script);
+    });
+}
+
+// jspdf-autotable 로드
+loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js')
+    .then(() => {
+        console.log('jspdf-autotable loaded successfully');
+    })
+    .catch(error => {
+        console.error(error);
+        alert('PDF 기능을 위한 필수 라이브러리를 로드하지 못했습니다. 인터넷 연결을 확인해주세요.');
+    });
+
 // 폰트 변수는 font.js에서 전역으로 선언됨
 
 // PWA 관련 변수
