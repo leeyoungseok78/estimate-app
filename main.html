@@ -11,7 +11,7 @@
     <meta name="apple-mobile-web-app-title" content="철거견적서">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="./style.css">
 </head>
 <body>
     <!-- 네비게이션 -->
@@ -248,7 +248,7 @@
     <div id="installBanner" class="install-banner">
         <div style="margin-bottom: 10px;">📱 홈화면에 앱으로 추가하세요!</div>
         <button onclick="installApp()">설치하기</button>
-        <button onclick="dismissInstall()">나중에</button>
+        <button onclick="document.getElementById('installBanner').style.display = 'none';">나중에</button>
     </div>
 
     <!-- 폰트 가이드 모달 -->
@@ -310,6 +310,6 @@
         </div>
     </div>
 
-    <script src="script.js"></script>
+    <script src="./script.js"></script>
 </body>
 </html>
