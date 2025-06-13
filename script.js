@@ -10,6 +10,16 @@ let generatedPdfSiteName = '';
 // 폰트 데이터 캐싱을 위한 변수
 let nanumGothicFont = null;
 
+// IndexedDB 관련 변수 및 초기화
+let db;
+const DB_NAME = 'estimateAppDB';
+const DB_VERSION = 1;
+const STORES = {
+    COMPANY: 'companyInfo',
+    CUSTOMERS: 'customers',
+    SETTINGS: 'settings'
+};
+
 // 페이지 전환 함수
 function showPage(pageName) {
     document.querySelectorAll('.container').forEach(page => page.classList.remove('active'));
@@ -170,7 +180,129 @@ function updateTotalAmount() {
     document.getElementById('totalAmount').textContent = `${total.toLocaleString()}원`;
 }
 
-function saveCompanyInfo() {
+// IndexedDB 초기화
+function initDB() {
+    return new Promise((resolve, reject) => {
+        const request = indexedDB.open(DB_NAME, DB_VERSION);
+        
+        request.onerror = (event) => {
+            console.error('IndexedDB 오류:', event.target.error);
+            // 에러 발생 시 localStorage로 폴백
+            alert('데이터베이스 연결에 실패했습니다. 로컬 스토리지를 사용합니다.');
+            resolve(false);
+        };
+        
+        request.onsuccess = (event) => {
+            db = event.target.result;
+            console.log('IndexedDB 연결 성공');
+            resolve(true);
+        };
+        
+        request.onupgradeneeded = (event) => {
+            const db = event.target.result;
+            
+            // 회사 정보 저장소
+            if (!db.objectStoreNames.contains(STORES.COMPANY)) {
+                db.createObjectStore(STORES.COMPANY, { keyPath: 'id', autoIncrement: true });
+            }
+            
+            // 고객 정보 저장소
+            if (!db.objectStoreNames.contains(STORES.CUSTOMERS)) {
+                db.createObjectStore(STORES.CUSTOMERS, { keyPath: 'id' });
+            }
+            
+            // 설정 저장소
+            if (!db.objectStoreNames.contains(STORES.SETTINGS)) {
+                db.createObjectStore(STORES.SETTINGS, { keyPath: 'key' });
+            }
+        };
+    });
+}
+
+// 데이터 저장 함수 (IndexedDB 또는 localStorage)
+function saveData(storeName, data, key = null) {
+    return new Promise((resolve, reject) => {
+        if (db) {
+            // IndexedDB 사용
+            try {
+                const transaction = db.transaction(storeName, 'readwrite');
+                const store = transaction.objectStore(storeName);
+                
+                let request;
+                if (key) {
+                    request = store.put({ key, value: data });
+                } else {
+                    request = store.put(data);
+                }
+                
+                request.onsuccess = () => resolve(true);
+                request.onerror = (e) => {
+                    console.error('IndexedDB 저장 오류:', e.target.error);
+                    // 에러 발생 시 localStorage로 폴백
+                    localStorage.setItem(storeName, JSON.stringify(data));
+                    resolve(false);
+                };
+            } catch (e) {
+                console.error('IndexedDB 트랜잭션 오류:', e);
+                // 에러 발생 시 localStorage로 폴백
+                localStorage.setItem(storeName, JSON.stringify(data));
+                resolve(false);
+            }
+        } else {
+            // localStorage 폴백
+            localStorage.setItem(storeName, JSON.stringify(data));
+            resolve(true);
+        }
+    });
+}
+
+// 데이터 불러오기 함수 (IndexedDB 또는 localStorage)
+function loadData(storeName, key = null) {
+    return new Promise((resolve, reject) => {
+        if (db) {
+            // IndexedDB 사용
+            try {
+                const transaction = db.transaction(storeName, 'readonly');
+                const store = transaction.objectStore(storeName);
+                
+                let request;
+                if (key) {
+                    request = store.get(key);
+                } else {
+                    // 모든 데이터 가져오기
+                    request = store.getAll();
+                }
+                
+                request.onsuccess = (event) => {
+                    if (key) {
+                        resolve(event.target.result ? event.target.result.value : null);
+                    } else {
+                        resolve(event.target.result || []);
+                    }
+                };
+                
+                request.onerror = (e) => {
+                    console.error('IndexedDB 로드 오류:', e.target.error);
+                    // 에러 발생 시 localStorage로 폴백
+                    const data = localStorage.getItem(storeName);
+                    resolve(data ? JSON.parse(data) : (key ? null : []));
+                };
+            } catch (e) {
+                console.error('IndexedDB 트랜잭션 오류:', e);
+                // 에러 발생 시 localStorage로 폴백
+                const data = localStorage.getItem(storeName);
+                resolve(data ? JSON.parse(data) : (key ? null : []));
+            }
+        } else {
+            // localStorage 폴백
+            const data = localStorage.getItem(storeName);
+            resolve(data ? JSON.parse(data) : (key ? null : []));
+        }
+    });
+}
+
+// 기존 함수 수정
+async function saveCompanyInfo() {
     const companyInfo = {
         name: document.getElementById('settingsCompanyName').value,
         manager: document.getElementById('settingsManager').value,
@@ -178,8 +310,8 @@ function saveCompanyInfo() {
         address: document.getElementById('settingsAddress').value
     };
     
-    localStorage.setItem('companyInfo', JSON.stringify(companyInfo));
-
+    await saveData(STORES.COMPANY, companyInfo, 'companyInfo');
+    
     const messageDiv = document.getElementById('companySavedMessage');
     messageDiv.style.display = 'block';
     setTimeout(() => {
@@ -187,16 +319,16 @@ function saveCompanyInfo() {
     }, 2000);
 }
 
-function loadCompanyInfo() {
-    const companyInfo = JSON.parse(localStorage.getItem('companyInfo')) || {};
+async function loadCompanyInfo() {
+    const companyInfo = await loadData(STORES.COMPANY, 'companyInfo') || {};
     document.getElementById('companyName').value = companyInfo.name || '';
     document.getElementById('manager').value = companyInfo.manager || '';
     document.getElementById('phone').value = companyInfo.phone || '';
     formatPhoneNumber(document.getElementById('phone'));
 }
 
-function loadSettingsCompanyInfo() {
-    const companyInfo = JSON.parse(localStorage.getItem('companyInfo')) || {};
+async function loadSettingsCompanyInfo() {
+    const companyInfo = await loadData(STORES.COMPANY, 'companyInfo') || {};
     document.getElementById('settingsCompanyName').value = companyInfo.name || '';
     document.getElementById('settingsManager').value = companyInfo.manager || '';
     document.getElementById('settingsPhone').value = companyInfo.phone || '';
@@ -413,9 +545,9 @@ async function generatePDF() {
     }
 }
 
-function saveEstimate(showAlert = false) {
+async function saveEstimate(showAlert = false) {
     const customer = {
-        id: 'customer-' + Date.now(),
+        id: document.getElementById('editingEstimateId').value || 'customer-' + Date.now(),
         companyName: document.getElementById('companyName').value,
         manager: document.getElementById('manager').value,
         phone: document.getElementById('phone').value,
@@ -448,47 +580,46 @@ function saveEstimate(showAlert = false) {
         return;
     }
     
-    let customers = JSON.parse(localStorage.getItem('customers')) || [];
+    // 고객 데이터 로드
+    let customers = await loadData(STORES.CUSTOMERS) || [];
     
     const editingId = document.getElementById('editingEstimateId').value;
     const existingIndex = editingId ? customers.findIndex(c => c.id === editingId) : -1;
 
     if (existingIndex > -1) {
-        customer.id = customers[existingIndex].id;
         customers[existingIndex] = customer;
     } else {
         customers.unshift(customer);
     }
     
-    localStorage.setItem('customers', JSON.stringify(customers));
-    document.getElementById('editingEstimateId').value = '';
-
-    if (showAlert) {
-        alert('견적이 저장되었습니다!');
-    }
+    // 고객 데이터 저장
+    await saveData(STORES.CUSTOMERS, customers);
     
-    const sentNotifications = new Set(JSON.parse(localStorage.getItem('sentNotifications')) || []);
-    sentNotifications.delete(customer.id);
-    localStorage.setItem('sentNotifications', JSON.stringify([...sentNotifications]));
+    if (showAlert) {
+        alert('견적이 저장되었습니다.');
+    }
 }
 
-function loadCustomers() {
-    const customers = JSON.parse(localStorage.getItem('customers')) || [];
+async function loadCustomers() {
+    const customers = await loadData(STORES.CUSTOMERS) || [];
     renderCustomerList(customers);
 }
 
-function searchCustomers() {
+async function searchCustomers() {
     const query = document.getElementById('searchInput').value.toLowerCase();
-    const allCustomers = JSON.parse(localStorage.getItem('customers')) || [];
+    const allCustomers = await loadData(STORES.CUSTOMERS) || [];
+    
     if (!query) {
         renderCustomerList(allCustomers);
         return;
     }
+    
     const filteredCustomers = allCustomers.filter(c => 
         (c.siteName && c.siteName.toLowerCase().includes(query)) ||
         (c.customerName && c.customerName.toLowerCase().includes(query)) ||
         (c.workAddress && c.workAddress.toLowerCase().includes(query))
     );
+    
     renderCustomerList(filteredCustomers, true);
 }
 
@@ -528,19 +659,19 @@ function renderCustomerList(customers, isSearchResult = false) {
     }).join('');
 }
 
-function deleteCustomer(event, customerId) {
+async function deleteCustomer(event, customerId) {
     event.stopPropagation();
     if (confirm('이 고객 정보를 정말로 삭제하시겠습니까?')) {
-        let customers = JSON.parse(localStorage.getItem('customers')) || [];
+        let customers = await loadData(STORES.CUSTOMERS) || [];
         customers = customers.filter(c => c.id !== customerId);
-        localStorage.setItem('customers', JSON.stringify(customers));
+        await saveData(STORES.CUSTOMERS, customers);
         loadCustomers();
     }
 }
 
-function viewEstimateDetails(event, customerId) {
+async function viewEstimateDetails(event, customerId) {
     event.stopPropagation();
-    const customers = JSON.parse(localStorage.getItem('customers')) || [];
+    const customers = await loadData(STORES.CUSTOMERS) || [];
     const customer = customers.find(c => c.id === customerId);
     if (customer) {
         document.getElementById('companyName').value = customer.companyName;
@@ -581,12 +712,27 @@ function viewEstimateDetails(event, customerId) {
 }
 
 function clearEstimateForm() {
-    document.getElementById('estimatePage').querySelector('form').reset();
+    // 회사 정보를 제외한 필드만 초기화
+    document.getElementById('siteName').value = '';
+    document.getElementById('customerName').value = '';
+    document.getElementById('customerPhone').value = '';
+    document.getElementById('workAddress').value = '';
+    document.getElementById('deadlineDate').value = '';
+    document.getElementById('notes').value = '';
+    
+    // 공사 항목 초기화
     document.getElementById('workItems').innerHTML = '';
     addWorkItem();
+    
+    // 견적일자는 오늘 날짜로 설정
     document.getElementById('estimateDate').value = new Date().toISOString().split('T')[0];
+    
+    // 편집 중인 ID 초기화
     document.getElementById('editingEstimateId').value = '';
-    loadCompanyInfo();
+    
+    // 회사 정보 유지 (loadCompanyInfo 호출 제거)
+    
+    // 총 금액 업데이트
     updateTotalAmount();
 }
 
@@ -604,13 +750,18 @@ function formatPhoneNumber(input) {
     }
 }
 
-function exportData() {
+async function exportData() {
     try {
+        const companyInfo = await loadData(STORES.COMPANY, 'companyInfo');
+        const customers = await loadData(STORES.CUSTOMERS);
+        const customFont = localStorage.getItem('customFont'); // 폰트는 여전히 localStorage에서 관리
+        
         const data = {
-            companyInfo: JSON.parse(localStorage.getItem('companyInfo')),
-            customers: JSON.parse(localStorage.getItem('customers')),
-            font: localStorage.getItem('customFont')
+            companyInfo,
+            customers,
+            font: customFont
         };
+        
         const dataStr = JSON.stringify(data, null, 2);
         const blob = new Blob([dataStr], {type: "application/json"});
         const url = URL.createObjectURL(blob);
@@ -631,17 +782,17 @@ function importData() {
     document.getElementById('importFile').click();
 }
 
-function handleFileImport(event) {
+async function handleFileImport(event) {
     const file = event.target.files[0];
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = function(e) {
+    reader.onload = async function(e) {
         try {
             const data = JSON.parse(e.target.result);
             if (confirm('데이터를 불러오면 현재 모든 데이터가 덮어씌워집니다. 계속하시겠습니까?')) {
-                if(data.companyInfo) localStorage.setItem('companyInfo', JSON.stringify(data.companyInfo));
-                if(data.customers) localStorage.setItem('customers', JSON.stringify(data.customers));
+                if(data.companyInfo) await saveData(STORES.COMPANY, data.companyInfo, 'companyInfo');
+                if(data.customers) await saveData(STORES.CUSTOMERS, data.customers);
                 if(data.font) {
                     localStorage.setItem('customFont', data.font);
                     window.font = data.font;
@@ -697,13 +848,35 @@ async function sharePDF() {
     closePdfActionModal();
 }
 
-function clearAllData() {
+async function clearAllData() {
     if (confirm('정말로 모든 회사 정보와 고객 데이터를 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.')) {
+        if (db) {
+            // IndexedDB 데이터 삭제
+            const transaction = db.transaction([STORES.COMPANY, STORES.CUSTOMERS, STORES.SETTINGS], 'readwrite');
+            transaction.objectStore(STORES.COMPANY).clear();
+            transaction.objectStore(STORES.CUSTOMERS).clear();
+            transaction.objectStore(STORES.SETTINGS).clear();
+        }
+        
+        // localStorage 데이터도 삭제
         localStorage.clear();
+        
         alert('모든 데이터가 삭제되었습니다. 페이지를 새로고침합니다.');
         location.reload();
     }
 }
+
+// 페이지 로드 시 DB 초기화
+document.addEventListener('DOMContentLoaded', async () => {
+    await initDB();
+    
+    // 초기화 후 데이터 로드
+    loadCompanyInfo();
+    
+    // 페이지 상태에 따라 데이터 로드
+    const activePage = document.querySelector('.container.active').id.replace('Page', '');
+    showPage(activePage);
+});
 
 // 전역 스코프에 함수 노출
 window.showPage = showPage;
