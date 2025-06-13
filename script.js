@@ -80,6 +80,14 @@ loadCompanyInfo();
 // 페이지 로드 시 기존 항목에 대한 금액 계산 이벤트 리스너 추가
 document.querySelectorAll('#workItems .work-quantity, #workItems .work-price').forEach(input => {
     input.addEventListener('input', updateTotalAmount);
+    
+    // 기존 input 태그 타입을 number에서 text로 변경하고 포맷팅 이벤트 추가
+    if (input.type === 'number') {
+        input.type = 'text';
+        input.addEventListener('input', function() {
+            formatNumber(this);
+        });
+    }
 });
 
 document.querySelectorAll('.nav-btn').forEach(btn => {
@@ -150,8 +158,12 @@ function checkDeadlines() {
 function updateTotalAmount() {
     let total = 0;
     document.querySelectorAll('#workItems .work-item').forEach(item => {
-        const quantity = parseFloat(item.querySelector('.work-quantity').value) || 0;
-        const price = parseFloat(item.querySelector('.work-price').value) || 0;
+        // 쉼표 제거 후 숫자로 변환
+        const quantityValue = item.querySelector('.work-quantity').value.replace(/,/g, '');
+        const priceValue = item.querySelector('.work-price').value.replace(/,/g, '');
+        
+        const quantity = parseFloat(quantityValue) || 0;
+        const price = parseFloat(priceValue) || 0;
         total += quantity * price;
     });
 
@@ -209,9 +221,9 @@ function addWorkItem(itemData = null) {
 
     newItem.innerHTML = `
         <input type="text" placeholder="공사 항목" class="work-name" value="${name}">
-        <input type="number" placeholder="수량" class="work-quantity" value="${quantity}">
-        <input type="text" placeholder="단위" class="work-unit" value="${unit}">
-        <input type="number" placeholder="단가" class="work-price" value="${price}">
+        <input type="text" placeholder="수량" class="work-quantity" value="${quantity}" oninput="formatNumber(this)">
+        <input type="text" placeholder="단위" class="work-unit" value="${unit}" list="unitOptions">
+        <input type="text" placeholder="단가" class="work-price" value="${price}" oninput="formatNumber(this)">
         <button onclick="removeWorkItem(this)">삭제</button>
     `;
     workItemsContainer.appendChild(newItem);
@@ -219,6 +231,20 @@ function addWorkItem(itemData = null) {
     newItem.querySelectorAll('.work-quantity, .work-price').forEach(input => {
         input.addEventListener('input', updateTotalAmount);
     });
+}
+
+// 천단위 쉼표 포맷 함수 추가
+function formatNumber(input) {
+    // 입력값에서 쉼표 제거
+    let value = input.value.replace(/,/g, '');
+    
+    // 숫자만 남기기
+    value = value.replace(/[^\d]/g, '');
+    
+    // 천단위 쉼표 추가
+    if (value) {
+        input.value = Number(value).toLocaleString();
+    }
 }
 
 function showFontGuide() {
@@ -300,11 +326,12 @@ async function generatePDF() {
         const workItems = [];
         document.querySelectorAll('#workItems .work-item').forEach(item => {
             const name = item.querySelector('.work-name').value;
-            const quantity = item.querySelector('.work-quantity').value;
+            const quantityValue = item.querySelector('.work-quantity').value.replace(/,/g, '');
             const unit = item.querySelector('.work-unit').value;
-            const price = item.querySelector('.work-price').value;
+            const priceValue = item.querySelector('.work-price').value.replace(/,/g, '');
+            
             if (name) {
-                workItems.push({ name, quantity, unit, price });
+                workItems.push({ name, quantity: quantityValue, unit, price: priceValue });
             }
         });
 
@@ -405,11 +432,12 @@ function saveEstimate(showAlert = false) {
 
     document.querySelectorAll('#workItems .work-item').forEach(item => {
         const name = item.querySelector('.work-name').value;
-        const quantity = item.querySelector('.work-quantity').value;
+        const quantityValue = item.querySelector('.work-quantity').value.replace(/,/g, '');
         const unit = item.querySelector('.work-unit').value;
-        const price = item.querySelector('.work-price').value;
+        const priceValue = item.querySelector('.work-price').value.replace(/,/g, '');
+        
         if (name) {
-            customer.workItems.push({ name, quantity, unit, price });
+            customer.workItems.push({ name, quantity: quantityValue, unit, price: priceValue });
         }
     });
 
@@ -531,7 +559,16 @@ function viewEstimateDetails(event, customerId) {
         const workItemsContainer = document.getElementById('workItems');
         workItemsContainer.innerHTML = '';
         if (customer.workItems && customer.workItems.length > 0) {
-            customer.workItems.forEach(item => addWorkItem(item));
+            customer.workItems.forEach(item => {
+                // 수량과 단가에 천단위 쉼표 적용
+                const formattedItem = {
+                    name: item.name,
+                    quantity: item.quantity ? Number(item.quantity).toLocaleString() : '',
+                    unit: item.unit,
+                    price: item.price ? Number(item.price).toLocaleString() : ''
+                };
+                addWorkItem(formattedItem);
+            });
         } else {
             addWorkItem(); // 비어있을 경우 기본 항목 추가
         }

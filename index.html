@@ -104,7 +104,15 @@
                     <div class="work-item">
                         <input type="text" placeholder="공사 항목" class="work-name">
                         <input type="number" placeholder="수량" class="work-quantity">
-                        <input type="text" placeholder="단위" class="work-unit">
+                        <input type="text" placeholder="단위" class="work-unit" list="unitOptions">
+                        <datalist id="unitOptions">
+                            <option value="명">
+                            <option value="EA">
+                            <option value="대">
+                            <option value="KG">
+                            <option value="톤">
+                            <option value="일">
+                        </datalist>
                         <input type="number" placeholder="단가" class="work-price">
                         <button onclick="removeWorkItem(this)">삭제</button>
                     </div>

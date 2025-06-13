@@ -185,7 +185,7 @@ body {
 
 .work-item .work-name { flex: 2.5; min-width: 100px;}
 .work-item .work-quantity { flex: 1; min-width: 50px; }
-.work-item .work-unit { flex: 0.8; min-width: 50px; }
+.work-item .work-unit { flex: 0.8; min-width: 50px; position: relative; }
 .work-item .work-price { flex: 1.2; min-width: 70px; }
 
 .work-item button {
