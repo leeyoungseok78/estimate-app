@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>철거 견적서 Pro</title>
+    <link rel="manifest" href="data:application/json;base64,eyJuYW1lIjoi7LKg6rGw6rKs7KCE7IScIFBybyIsInNob3J0X25hbWUiOiLsspDqsK3rj4QiLCJzdGFydF91cmwiOiIuLyIsImRpc3BsYXkiOiJzdGFuZGFsb25lIiwiYmFja2dyb3VuZF9jb2xvciI6IiM2NjdlZWEiLCJ0aGVtZV9jb2xvciI6IiM2NjdlZWEiLCJpY29ucyI6W3sic3JjIjoiZGF0YTppbWFnZS9zdmcreG1sO2Jhc2U2NCxQSE4yWnlCM2FXUjBhRDBpTVRJNElpQm9aV2xuYUhROUlqRXlPQ0lnZG1sbGQwSnZlRDBpTUNBd0lERXlPQ0F4TWpnaUlIaHRiRzV6UFNKb2RIUndPaTh2ZDNkM0xuY3pMbTl5Wnk4eU1EQXdMM04yWnlJK1BISmxZM1FnZUQwaU1UQWlJSGs5SWpFd0lpQjNhV1IwYUQwaU1UQTRJaUJvWldsbmFIUTlJakV3T0NJZ2NuZzlJalFpSUdacGJHdzlJaU0yTmpkbFpXRWlMejQ4WjJWeVBqeDBaWGgwSUhnOUlqWTBJaUI1UFNJMk5DSWdabWxzYkQwaWJtOXVaU0lnWm05dWRDMW1ZVzFwYkhrOUlrRnlhV0ZzSWpCbWIyNTBMWE5wZW1VOUlqTXlJaUJtYjI1MExYZGxhV2RvZEQwaWFtOXNaQ0lnZEdWNGRDMWhibU5vYjNJOUltMXBaR1JzWlNJKzVyR3c2ckt3NXJHdzhicTZ3d3A4THVhTGtlYVI0L1M1cTFzdmU1YkNBU1RvUUxtZzVIaWczNWF4M0F1b0RMOGdEOEw4Z2NnN0lGaXZEVmtKWDhpTHpNeGJtbHlkQzkrUEM5blBqd3ZjM1puUGc9PSIsInNpemVzIjoiMTI4eDEyOCIsInR5cGUiOiJpbWFnZS9zdmcreG1sIn1dfQ==">
+    <meta name="theme-color" content="#667eea">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="철거견적서">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- 네비게이션 -->
+    <div class="nav-bar">
+        <button class="nav-btn active" data-page="estimate">
+            📝<br>견적서 작성
+        </button>
+        <button class="nav-btn" data-page="customers">
+            👥<br>고객 관리
+        </button>
+        <button class="nav-btn" data-page="settings">
+            ⚙️<br>설정
+        </button>
+    </div>
+
+    <!-- 견적서 작성 페이지 -->
+    <div id="estimatePage" class="container active">
+        <div class="header">
+            <h1>🏗️ 견적서 작성</h1>
+            <p>전문적인 철거 견적서를 쉽게 작성하세요</p>
+        </div>
+
+        <div class="form-container">
+            <!-- 회사 정보 (자동 로드) -->
+            <div class="section">
+                <div class="section-title">회사 정보</div>
+                <div class="form-group">
+                    <label>회사명</label>
+                    <input type="text" id="companyName" placeholder="예: 한국철거전문">
+                </div>
+                <div class="row">
+                    <div class="col">
+                        <div class="form-group">
+                            <label>담당자</label>
+                            <input type="text" id="manager" placeholder="홍길동">
+                        </div>
+                    </div>
+                    <div class="col">
+                        <div class="form-group">
+                            <label>연락처</label>
+                            <input type="tel" id="phone" oninput="formatPhoneNumber(this)" placeholder="010-1234-5678">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 고객 정보 -->
+            <div class="section">
+                <div class="section-title">고객 정보</div>
+                <div class="form-group">
+                    <label>현장명</label>
+                    <input type="text" id="siteName" placeholder="예: 강남 아파트 인테리어 철거">
+                </div>
+                <div class="row">
+                    <div class="col">
+                        <div class="form-group">
+                            <label>고객명</label>
+                            <input type="text" id="customerName" placeholder="고객 이름">
+                        </div>
+                    </div>
+                    <div class="col">
+                        <div class="form-group">
+                            <label>연락처</label>
+                            <input type="tel" id="customerPhone" oninput="formatPhoneNumber(this)" placeholder="010-9876-5432">
+                        </div>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>공사 주소</label>
+                    <input type="text" id="workAddress" placeholder="서울시 강남구 테헤란로 123">
+                </div>
+                <div class="row">
+                    <div class="col">
+                        <div class="form-group">
+                            <label>견적일자</label>
+                            <input type="date" id="estimateDate">
+                        </div>
+                    </div>
+                    <div class="col">
+                        <div class="form-group">
+                            <label>제출 마감일</label>
+                            <input type="date" id="deadlineDate">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 공사 내용 -->
+            <div class="section">
+                <div class="section-title">공사 내용</div>
+                <div class="work-items" id="workItems">
+                    <div class="work-item">
+                        <input type="text" placeholder="공사 항목" class="work-name">
+                        <input type="number" placeholder="수량" class="work-quantity">
+                        <input type="text" placeholder="단위" class="work-unit">
+                        <input type="number" placeholder="단가" class="work-price">
+                        <button onclick="removeWorkItem(this)">삭제</button>
+                    </div>
+                </div>
+                <button class="add-item-btn" onclick="addWorkItem()">+ 항목 추가</button>
+            </div>
+
+            <!-- 총 금액 -->
+            <div class="total-section">
+                <div>총 견적 금액</div>
+                <div class="total-amount" id="totalAmount">0원</div>
+            </div>
+
+            <!-- 특이사항 -->
+            <div class="section">
+                <div class="section-title">특이사항</div>
+                <div class="form-group">
+                    <textarea id="notes" placeholder="공사 시 주의사항이나 특이사항을 입력하세요"></textarea>
+                </div>
+            </div>
+
+            <!-- 버튼 그룹 -->
+            <div class="btn-group">
+                <button class="btn btn-secondary" onclick="clearEstimateForm()">새로 작성</button>
+                <button class="btn btn-secondary" onclick="saveEstimateAndClear()">견적 저장</button>
+                <button class="btn btn-primary" onclick="generatePDF()">PDF 생성 & 공유</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 고객 관리 페이지 -->
+    <div id="customersPage" class="container">
+        <div class="header">
+            <h1>👥 고객 관리</h1>
+            <p>저장된 고객 정보를 관리하세요</p>
+        </div>
+
+        <div class="form-container">
+            <!-- 검색 바 -->
+            <div class="search-bar">
+                <input type="text" id="searchInput" placeholder="현장명, 이름, 주소로 검색..." onkeyup="searchCustomers()">
+            </div>
+
+            <!-- 고객 리스트 -->
+            <div class="customer-list" id="customerList">
+                <div class="empty-state">
+                    <div style="font-size: 48px; margin-bottom: 15px;">📋</div>
+                    <h3>저장된 고객이 없습니다</h3>
+                    <p>견적서를 작성하면 고객 정보가 자동으로 저장됩니다</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 설정 페이지 -->
+    <div id="settingsPage" class="container">
+        <div class="header">
+            <h1>⚙️ 설정</h1>
+            <p>앱 설정 및 회사 정보 관리</p>
+        </div>
+
+        <div class="form-container">
+            <!-- 회사 정보 설정 -->
+            <div class="section">
+                <div class="section-title">회사 정보 설정</div>
+                <div class="company-settings">
+                    <div class="form-group">
+                        <label>회사명</label>
+                        <input type="text" id="settingsCompanyName" placeholder="회사명을 입력하세요">
+                    </div>
+                    <div class="row">
+                        <div class="col">
+                            <div class="form-group">
+                                <label>담당자명</label>
+                                <input type="text" id="settingsManager" placeholder="담당자명">
+                            </div>
+                        </div>
+                        <div class="col">
+                            <div class="form-group">
+                                <label>연락처</label>
+                                <input type="tel" id="settingsPhone" oninput="formatPhoneNumber(this)" placeholder="010-1234-5678">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>회사 주소</label>
+                        <input type="text" id="settingsAddress" placeholder="회사 주소">
+                    </div>
+                    <button class="save-company-btn" onclick="saveCompanyInfo()">회사 정보 저장</button>
+                    <div id="companySavedMessage" class="company-saved" style="display: none;">
+                        ✅ 회사 정보가 저장되었습니다!
+                    </div>
+                </div>
+            </div>
+
+            <!-- 폰트 설정 -->
+            <div class="section">
+                <div class="section-title">PDF 한글 폰트 설정</div>
+                <div class="font-settings">
+                    <p>PDF 생성 시 한글이 깨지는 문제를 해결하기 위한 설정입니다.</p>
+                    <div class="form-group">
+                        <label>폰트 파일 (.ttf)</label>
+                        <input type="file" id="fontFile" accept=".ttf" onchange="handleFontUpload(event)">
+                    </div>
+                    <div class="form-hint">
+                        <small>* 나눔고딕 폰트를 권장합니다. <a href="https://hangeul.naver.com/font" target="_blank">다운로드</a></small>
+                    </div>
+                    <div id="fontStatus" class="font-status"></div>
+                    <button class="btn btn-secondary" onclick="showFontGuide()">폰트 설정 도움말</button>
+                </div>
+            </div>
+
+            <!-- 데이터 관리 -->
+            <div class="section">
+                <div class="section-title">데이터 관리</div>
+                <div class="btn-group">
+                    <button class="btn btn-secondary" onclick="exportData()">데이터 내보내기</button>
+                    <button class="btn btn-secondary" onclick="importData()">데이터 불러오기</button>
+                </div>
+                <input type="file" id="importFile" accept=".json" style="display: none;" onchange="handleFileImport(event)">
+            </div>
+
+            <!-- 앱 정보 -->
+            <div class="section">
+                <div class="section-title">앱 정보</div>
+                <p style="color: #666; font-size: 14px; line-height: 1.6;">
+                    철거 견적서 Pro v1.0<br>
+                    전문적인 철거 견적서 작성 및 고객 관리 앱<br>
+                    <br>
+                    📱 PWA 앱으로 홈화면에 추가 가능<br>
+                    💾 오프라인에서도 사용 가능<br>
+                    🔒 모든 데이터는 기기에 안전하게 저장
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- PWA 설치 배너 -->
+    <div id="installBanner" class="install-banner">
+        <div style="margin-bottom: 10px;">📱 홈화면에 앱으로 추가하세요!</div>
+        <button onclick="installApp()">설치하기</button>
+        <button onclick="dismissInstall()">나중에</button>
+    </div>
+
+    <!-- 폰트 가이드 모달 -->
+    <div id="fontGuideModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>PDF 한글 폰트 설정 방법</h3>
+                <span class="close-modal" onclick="closeFontGuideModal()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <ol>
+                    <li>
+                        <strong>나눔고딕 폰트(.ttf) 파일을 다운로드합니다.</strong><br>
+                        <a href="https://hangeul.naver.com/font" target="_blank">네이버 나눔고딕 다운로드</a>에서 다운로드 가능합니다.
+                    </li>
+                    <li>
+                        <strong>위의 '폰트 파일' 선택 버튼을 클릭하여 다운로드한 .ttf 파일을 선택합니다.</strong><br>
+                        선택한 폰트는 자동으로 변환되어 앱에 저장됩니다.
+                    </li>
+                    <li>
+                        <strong>이제 PDF 생성 시 한글이 정상적으로 표시됩니다.</strong><br>
+                        폰트 설정은 브라우저 저장소에 유지되므로 한 번만 설정하면 됩니다.
+                    </li>
+                </ol>
+                <div class="font-guide-note">
+                    <p><strong>참고:</strong> 폰트 파일은 브라우저 내에서만 사용되며, 외부로 전송되지 않습니다.</p>
+                    <p><strong>주의:</strong> 폰트 파일이 너무 크면 저장에 실패할 수 있습니다. 가능하면 2MB 이하의 폰트 파일을 사용하세요.</p>
+                    <p><strong>권장:</strong> 나눔고딕 Light 또는 Regular 버전을 사용하시면 파일 크기가 작아 저장이 원활합니다.</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button onclick="closeFontGuideModal()">확인</button>
+            </div>
+        </div>
+    </div>
+
+    <input type="hidden" id="editingEstimateId">
+
+    <!-- 로딩 오버레이 -->
+    <div id="loadingOverlay" class="loading-overlay">
+        <div class="loading-spinner"></div>
+        <p>PDF를 생성 중입니다. 잠시만 기다려주세요...</p>
+    </div>
+
+    <!-- PDF 작업 선택 모달 -->
+    <div id="pdfActionModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>PDF 생성 완료</h3>
+                <span class="close-modal" onclick="closePdfActionModal()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <p>PDF 파일이 성공적으로 생성되었습니다. 어떤 작업을 하시겠습니까?</p>
+                <div class="btn-group" style="margin-top: 20px;">
+                    <button class="btn btn-secondary" onclick="downloadPDF()">💾 PDF 다운로드</button>
+                    <button class="btn btn-primary" onclick="sharePDF()">🔗 PDF 공유하기</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

@@ -1,0 +1,697 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Malgun Gothic', sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+    padding: 10px;
+}
+
+.container {
+    max-width: 500px;
+    margin: 0 auto;
+    background: white;
+    border-radius: 20px;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+    overflow: hidden;
+    display: none;
+}
+
+.container.active {
+    display: block;
+}
+
+.header {
+    background: linear-gradient(45deg, #FF6B6B, #FF8E53);
+    color: white;
+    padding: 20px;
+    text-align: center;
+    position: relative;
+}
+
+.header h1 {
+    font-size: 24px;
+    font-weight: bold;
+    margin-bottom: 5px;
+}
+
+.header p {
+    font-size: 14px;
+    opacity: 0.9;
+}
+
+.back-btn {
+    position: absolute;
+    left: 20px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: rgba(255,255,255,0.2);
+    border: none;
+    color: white;
+    padding: 10px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 16px;
+}
+
+.nav-bar {
+    background: white;
+    padding: 10px;
+    display: flex;
+    justify-content: space-around;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    border-radius: 20px;
+    margin: 10px;
+}
+
+.nav-btn {
+    flex: 1;
+    padding: 15px 10px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    border-radius: 15px;
+    font-size: 12px;
+    font-weight: bold;
+    color: #666;
+    transition: all 0.3s ease;
+    text-align: center;
+}
+
+.nav-btn.active {
+    background: linear-gradient(45deg, #667eea, #764ba2);
+    color: white;
+}
+
+.nav-btn:hover {
+    background: #f0f0f0;
+}
+
+.nav-btn.active:hover {
+    background: linear-gradient(45deg, #667eea, #764ba2);
+}
+
+.form-container {
+    padding: 20px;
+}
+
+.section {
+    margin-bottom: 25px;
+}
+
+.section-title {
+    font-size: 18px;
+    font-weight: bold;
+    color: #333;
+    margin-bottom: 15px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid #667eea;
+}
+
+.form-group {
+    margin-bottom: 15px;
+}
+
+.form-group label {
+    display: block;
+    font-weight: bold;
+    color: #555;
+    margin-bottom: 8px;
+    font-size: 14px;
+}
+
+.form-group input,
+.form-group textarea,
+.form-group select {
+    width: 100%;
+    padding: 12px;
+    border: 2px solid #e1e5e9;
+    border-radius: 10px;
+    font-size: 16px;
+    transition: all 0.3s ease;
+    background: #f8f9fa;
+}
+
+.form-group input:focus,
+.form-group textarea:focus,
+.form-group select:focus {
+    outline: none;
+    border-color: #667eea;
+    background: white;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.form-group textarea {
+    height: 80px;
+    resize: vertical;
+}
+
+.work-items {
+    background: #f8f9fa;
+    border-radius: 12px;
+    padding: 15px;
+    margin-bottom: 15px;
+}
+
+.work-item {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+    align-items: center;
+}
+
+.work-item input {
+    padding: 10px;
+    font-size: 14px;
+    border: 2px solid #e1e5e9;
+    border-radius: 10px;
+    background: #f8f9fa;
+    transition: all 0.3s ease;
+    box-sizing: border-box;
+}
+
+.work-item input:focus {
+    outline: none;
+    border-color: #667eea;
+    background: white;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.work-item .work-name { flex: 2.5; min-width: 100px;}
+.work-item .work-quantity { flex: 1; min-width: 50px; }
+.work-item .work-unit { flex: 0.8; min-width: 50px; }
+.work-item .work-price { flex: 1.2; min-width: 70px; }
+
+.work-item button {
+    background: #ff4757;
+    color: white;
+    border: none;
+    padding: 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 12px;
+    transition: background 0.3s ease;
+}
+
+.work-item button:hover {
+    background: #ff3742;
+}
+
+.add-item-btn {
+    background: #667eea;
+    color: white;
+    border: none;
+    padding: 12px 20px;
+    border-radius: 10px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: bold;
+    width: 100%;
+    transition: all 0.3s ease;
+}
+
+.add-item-btn:hover {
+    background: #5a67d8;
+    transform: translateY(-2px);
+}
+
+.total-section {
+    background: linear-gradient(45deg, #667eea, #764ba2);
+    color: white;
+    padding: 20px;
+    border-radius: 15px;
+    text-align: center;
+    margin: 15px 0;
+}
+
+.total-amount {
+    font-size: 28px;
+    font-weight: bold;
+    margin-top: 5px;
+}
+
+.btn-group {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+}
+
+.btn {
+    flex: 1;
+    padding: 15px;
+    border: none;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.btn-primary {
+    background: linear-gradient(45deg, #667eea, #764ba2);
+    color: white;
+}
+
+.btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+}
+
+.btn-secondary {
+    background: #f8f9fa;
+    color: #333;
+    border: 2px solid #e1e5e9;
+}
+
+.btn-secondary:hover {
+    background: #e9ecef;
+}
+
+.row {
+    display: flex;
+    gap: 10px;
+}
+
+.col {
+    flex: 1;
+}
+
+/* 고객 리스트 스타일 */
+.search-bar {
+    position: relative;
+    margin-bottom: 20px;
+}
+
+.search-bar input {
+    width: 100%;
+    padding: 15px 45px 15px 15px;
+    border: 2px solid #e1e5e9;
+    border-radius: 15px;
+    font-size: 16px;
+    background: #f8f9fa;
+}
+
+.search-bar::after {
+    content: '🔍';
+    position: absolute;
+    right: 15px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 18px;
+}
+
+.customer-list {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.customer-item {
+    background: white;
+    border-radius: 12px;
+    padding: 15px;
+    margin-bottom: 10px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.customer-item:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 20px rgba(0,0,0,0.08);
+}
+
+.customer-item-buttons {
+    display: flex;
+    gap: 10px;
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 1px solid #f0f0f0;
+}
+
+.customer-item-buttons button {
+    flex: 1;
+    padding: 10px;
+    font-size: 14px;
+    font-weight: bold;
+    border-radius: 8px;
+    border: none;
+    color: white;
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+}
+
+.customer-item-buttons .btn-edit {
+    background: #667eea;
+}
+
+.customer-item-buttons .btn-edit:hover {
+    background: #5a67d8;
+    transform: translateY(-1px);
+}
+
+.customer-item-buttons .btn-delete {
+    background: #ff4757;
+}
+
+.customer-item-buttons .btn-delete:hover {
+    background: #e03f4d;
+    transform: translateY(-1px);
+}
+
+.customer-name {
+    font-size: 18px;
+    font-weight: bold;
+    color: #333;
+    margin-bottom: 5px;
+}
+
+.customer-info {
+    font-size: 14px;
+    color: #666;
+    margin-bottom: 3px;
+}
+
+.customer-info a {
+    color: #667eea;
+    text-decoration: none;
+    font-weight: bold;
+}
+.customer-info a:hover {
+    text-decoration: underline;
+}
+
+.customer-date {
+    font-size: 12px;
+    color: #999;
+}
+
+.customer-deadline {
+    font-size: 13px;
+    font-weight: bold;
+    margin-top: 5px;
+    padding: 4px 8px;
+    border-radius: 8px;
+    color: white;
+    display: inline-block;
+}
+.customer-deadline.urgent {
+    background-color: #ff6b6b; /* 마감 임박 (빨강) */
+}
+.customer-deadline.today {
+    background-color: #ffa502; /* 마감 오늘 (주황) */
+}
+.customer-deadline.normal {
+    color: #333;
+    background-color: #e9ecef; /* 마감일 남음 (회색) */
+}
+.customer-deadline.overdue {
+    background-color: #777; /* 마감일 지남 */
+    text-decoration: line-through;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: #666;
+}
+
+.empty-state img {
+    width: 80px;
+    opacity: 0.5;
+    margin-bottom: 15px;
+}
+
+/* 회사 정보 설정 */
+.company-settings {
+    background: #f8f9fa;
+    border-radius: 15px;
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+.save-company-btn {
+    background: #28a745;
+    color: white;
+    border: none;
+    padding: 12px 25px;
+    border-radius: 10px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: bold;
+    margin-top: 15px;
+}
+
+.save-company-btn:hover {
+    background: #218838;
+}
+
+.company-saved {
+    background: #d4edda;
+    color: #155724;
+    padding: 10px;
+    border-radius: 10px;
+    margin-top: 10px;
+    text-align: center;
+    font-size: 14px;
+}
+
+/* 반응형 */
+@media (max-width: 480px) {
+    .container {
+        margin: 0;
+        border-radius: 0;
+        min-height: 100vh;
+    }
+    
+    .nav-bar {
+        margin: 0;
+        border-radius: 0;
+    }
+    
+    .btn-group {
+        flex-direction: column;
+    }
+    
+    .work-item {
+        flex-wrap: wrap;
+    }
+    
+    .work-item input {
+        min-width: 100px;
+    }
+}
+
+/* PWA 설치 배너 */
+.install-banner {
+    background: linear-gradient(45deg, #28a745, #20c997);
+    color: white;
+    padding: 15px;
+    text-align: center;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+    transform: translateY(100%);
+    transition: transform 0.3s ease;
+}
+
+.install-banner.show {
+    transform: translateY(0);
+}
+
+.install-banner button {
+    background: rgba(255,255,255,0.2);
+    border: 2px solid white;
+    color: white;
+    padding: 10px 20px;
+    border-radius: 25px;
+    cursor: pointer;
+    font-weight: bold;
+    margin: 0 5px;
+}
+
+/* 모달 관련 스타일 추가 */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    background-color: rgba(0, 0, 0, 0.4);
+}
+
+.modal-content {
+    background-color: #fefefe;
+    margin: 10% auto;
+    padding: 0;
+    border: 1px solid #888;
+    border-radius: 8px;
+    width: 80%;
+    max-width: 600px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    animation: modalFadeIn 0.3s;
+}
+
+@keyframes modalFadeIn {
+    from {opacity: 0; transform: translateY(-20px);}
+    to {opacity: 1; transform: translateY(0);}
+}
+
+.modal-header {
+    padding: 15px 20px;
+    background-color: #f8f9fa;
+    border-bottom: 1px solid #dee2e6;
+    border-radius: 8px 8px 0 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.modal-header h3 {
+    margin: 0;
+    font-size: 18px;
+}
+
+.close-modal {
+    color: #aaa;
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.close-modal:hover,
+.close-modal:focus {
+    color: black;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.modal-body {
+    padding: 20px;
+    line-height: 1.6;
+}
+
+.modal-footer {
+    padding: 15px 20px;
+    background-color: #f8f9fa;
+    border-top: 1px solid #dee2e6;
+    border-radius: 0 0 8px 8px;
+    text-align: right;
+}
+
+.modal-footer button {
+    padding: 8px 16px;
+    background-color: #4a6cf7;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.modal-footer button:hover {
+    background-color: #3a5ce5;
+}
+
+/* 폰트 설정 관련 스타일 */
+.font-settings {
+    padding: 15px;
+    background-color: #f9f9f9;
+    border-radius: 8px;
+    margin-bottom: 20px;
+}
+
+.font-status {
+    margin-top: 15px;
+    min-height: 24px;
+}
+
+.success-message {
+    color: #28a745;
+    padding: 8px;
+    background-color: #e8f5e9;
+    border-radius: 4px;
+    margin-bottom: 10px;
+}
+
+.error-message {
+    color: #dc3545;
+    padding: 8px;
+    background-color: #ffebee;
+    border-radius: 4px;
+    margin-bottom: 10px;
+}
+
+.form-hint {
+    margin-top: 5px;
+    color: #666;
+}
+
+.form-hint a {
+    color: #4a6cf7;
+    text-decoration: none;
+}
+
+.form-hint a:hover {
+    text-decoration: underline;
+}
+
+.font-guide-note {
+    margin-top: 20px;
+    padding: 10px;
+    background-color: #fff3cd;
+    border-left: 4px solid #ffc107;
+    border-radius: 4px;
+}
+
+/* 파일 입력 스타일 개선 */
+input[type="file"] {
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    width: 100%;
+    background-color: #fff;
+}
+
+/* 로딩 오버레이 */
+.loading-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.6);
+    display: none; /* 기본적으로 숨김 */
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
+    color: white;
+    flex-direction: column;
+    text-align: center;
+}
+
+.loading-overlay.show {
+    display: flex;
+}
+
+.loading-spinner {
+    border: 6px solid #f3f3f3;
+    border-top: 6px solid #667eea;
+    border-radius: 50%;
+    width: 50px;
+    height: 50px;
+    animation: spin 1.2s linear infinite;
+    margin-bottom: 20px;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+} 
