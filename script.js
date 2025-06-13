@@ -7,9 +7,8 @@ let generatedPdfDoc = null;
 let generatedPdfFile = null;
 let generatedPdfSiteName = '';
 
-// 파일 시스템 접근을 위한 변수
-let dbDirectoryHandle = null;
-const DB_FILE_NAME = 'database.json';
+// 폰트 데이터 캐싱을 위한 변수
+let nanumGothicFont = null;
 
 // 페이지 전환 함수
 function showPage(pageName) {
@@ -75,238 +74,84 @@ function installApp() {
 }
 
 // 초기화
-document.addEventListener('DOMContentLoaded', () => {
-    document.getElementById('estimateDate').value = new Date().toISOString().split('T')[0];
-    
-    // 페이지 로드 시 기존 항목에 대한 금액 계산 이벤트 리스너 추가
-    document.querySelectorAll('#workItems .work-quantity, #workItems .work-price').forEach(input => {
-        input.addEventListener('input', updateTotalAmount);
-    });
+document.getElementById('estimateDate').value = new Date().toISOString().split('T')[0];
+loadCompanyInfo();
 
-    document.querySelectorAll('.nav-btn').forEach(btn => {
-        btn.addEventListener('click', function() {
-            const page = this.getAttribute('data-page');
-            showPage(page);
-        });
-    });
-
-    setTimeout(() => {
-        if (deferredPrompt && !window.matchMedia('(display-mode: standalone)').matches) {
-            showInstallBanner();
-        }
-    }, 3000);
-
-    // 알림 권한 요청 및 마감일 체크
-    requestNotificationPermission();
-    setInterval(checkDeadlines, 3600000); // 1시간마다 마감일 체크
-    
-    // 파일 시스템 초기화 및 데이터 로드
-    initializeFileSystem();
+// 페이지 로드 시 기존 항목에 대한 금액 계산 이벤트 리스너 추가
+document.querySelectorAll('#workItems .work-quantity, #workItems .work-price').forEach(input => {
+    input.addEventListener('input', updateTotalAmount);
 });
 
-// 파일 시스템 초기화
-async function initializeFileSystem() {
-    // IndexedDB에서 핸들 가져오기
-    dbDirectoryHandle = await getDirectoryHandleFromDB();
-    if (dbDirectoryHandle) {
-        // 권한 확인 (페이지 로드 시에는 요청하지 않음)
-        if (await verifyPermission(dbDirectoryHandle, { request: false })) {
-            updateFileSystemStatus(true, '연결됨');
-            await loadDataFromFile(); // 파일에서 데이터 로드
-        } else {
-            // 핸들은 있지만 권한이 없는 상태
-            updateFileSystemStatus(false, '권한이 필요합니다. 폴더를 다시 연결해 주세요.');
-            loadDataFromLocalStorage(); // 우선 로컬 스토리지에서 로드
-        }
-    } else {
-        updateFileSystemStatus(false, '연결되지 않음');
-        loadDataFromLocalStorage(); // 로컬 스토리지에서 로드
+document.querySelectorAll('.nav-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+        const page = this.getAttribute('data-page');
+        showPage(page);
+    });
+});
+
+setTimeout(() => {
+    if (deferredPrompt && !window.matchMedia('(display-mode: standalone)').matches) {
+        showInstallBanner();
+    }
+}, 3000);
+
+// 알림 권한 요청 및 마감일 체크
+requestNotificationPermission();
+setInterval(checkDeadlines, 3600000); // 1시간마다 마감일 체크
+checkDeadlines(); // 앱 로드 시 즉시 체크
+
+function requestNotificationPermission() {
+    if ('Notification' in window && Notification.permission === 'default') {
+        Notification.requestPermission().then(permission => {
+            if (permission === 'granted') {
+                new Notification('알림이 활성화되었습니다!', {
+                    body: '견적 마감일을 놓치지 않도록 알려드릴게요.',
+                    icon: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0id2hpdGUiPjxwYXRoIGQ9Ik0xMiAyQzYuNDggMiAyIDYuNDggMiAxMnM0LjQ4IDEwIDEwIDEwIDEwLTQuNDggMTAtMTBTMTcuNTIgMiAxMiAyem0wIDE4Yy00LjQxIDAtOC0zLjU5LTgtOHMzLjU5LTggOC04IDggMy41OSA4IDgtMy41OSA4LTggOHptLTIuMDgtMTMuMDRMMTAgOC4wNGwyLjA4IDIuMDggMi4wOC0yLjA4TDE1LjIgOC4wNGwtMi4wOCAyLjA4IDIuMDggMi4wOEwxNC4xMiAxMy4ybC0yLjA4LTIuMDhMMTAgMTMuMmwtMS4wNC0xLjA0IDIuMDgtMi4wOHoiLz48L3N2Zz4='
+                });
+            }
+        });
     }
 }
 
-// 데이터 로드 통합
-function loadDataFromLocalStorage() {
-    loadCompanyInfo();
-    checkDeadlines();
-}
+function checkDeadlines() {
+    if (!('Notification' in window) || Notification.permission !== 'granted') {
+        return;
+    }
 
-async function connectFileSystem() {
-    try {
-        const handle = await window.showDirectoryPicker();
-        if (handle) {
-            dbDirectoryHandle = handle;
-            await setDirectoryHandleInDB(handle);
-            updateFileSystemStatus(true, '성공적으로 연결되었습니다!');
+    const customers = JSON.parse(localStorage.getItem('customers')) || [];
+    const sentNotifications = new Set(JSON.parse(localStorage.getItem('sentNotifications')) || []);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
 
-            try {
-                // 연결 시 기존 데이터 파일이 있는지 확인
-                await dbDirectoryHandle.getFileHandle(DB_FILE_NAME);
-                // 파일이 존재하면 데이터를 불러옴
-                await loadDataFromFile();
-                alert('폴더에 다시 연결하고 기존 데이터를 불러왔습니다.');
-            } catch (error) {
-                if (error.name === 'NotFoundError') {
-                    // 파일이 없으면 현재 데이터를 파일에 백업
-                    await saveDataToFile();
-                    alert('폴더가 연결되었습니다. 이제 모든 데이터는 선택한 폴더에 안전하게 자동 저장됩니다.');
-                } else {
-                    throw error;
-                }
+    customers.forEach(customer => {
+        if (customer.deadlineDate && !sentNotifications.has(customer.id)) {
+            const deadline = new Date(customer.deadlineDate);
+            deadline.setHours(0, 0, 0, 0);
+
+            const diffDays = (deadline - today) / (1000 * 60 * 60 * 24);
+
+            if (diffDays <= 1) {
+                new Notification(`'${customer.siteName}' 견적 마감 임박`, {
+                    body: `마감일: ${customer.deadlineDate}. 서둘러 제출해주세요!`,
+                    tag: `deadline-${customer.id}`
+                });
+                
+                const alarm = document.getElementById('alarmSound');
+                if (alarm) alarm.play().catch(e => console.log("알람 소리 재생 실패:", e));
+                
+                sentNotifications.add(customer.id);
             }
         }
-    } catch (error) {
-        if (error.name !== 'AbortError') {
-            console.error('폴더 연결 실패:', error);
-            alert('데이터 폴더를 연결하는 데 실패했습니다.');
-        }
-    }
-}
-
-function updateFileSystemStatus(isConnected, message = '') {
-    const statusEl = document.getElementById('fileSystemStatus');
-    if (!statusEl) return;
-    
-    const statusSpan = statusEl.querySelector('span');
-    if (isConnected) {
-        statusSpan.textContent = '연결됨';
-        statusSpan.className = 'status-connected';
-    } else {
-        statusSpan.textContent = '연결되지 않음';
-        statusSpan.className = 'status-disconnected';
-    }
-    // 추가 메시지 (예: 성공, 실패)
-    // 이 부분은 필요에 따라 추가 구현
-}
-
-async function saveDataToFile() {
-    if (!dbDirectoryHandle) return;
-
-    // 데이터를 저장하기 전에 항상 권한을 확인하고 필요한 경우 요청합니다.
-    if (!(await verifyPermission(dbDirectoryHandle))) {
-        updateFileSystemStatus(false, '권한이 필요합니다. 폴더를 다시 연결해 주세요.');
-        alert('데이터를 저장하기 위한 폴더 접근 권한이 없습니다. 설정 페이지에서 폴더를 다시 연결해주세요.');
-        return;
-    }
-
-    try {
-        const fileHandle = await dbDirectoryHandle.getFileHandle(DB_FILE_NAME, { create: true });
-        const writable = await fileHandle.createWritable();
-        
-        const data = {
-            companyInfo: JSON.parse(localStorage.getItem('companyInfo') || '{}'),
-            customers: JSON.parse(localStorage.getItem('customers') || '[]')
-        };
-        
-        await writable.write(JSON.stringify(data, null, 2));
-        await writable.close();
-        console.log('데이터가 파일에 성공적으로 저장되었습니다.');
-    } catch (error) {
-        console.error('파일에 데이터 저장 실패:', error);
-        alert('연결된 폴더에 데이터를 저장하는 데 실패했습니다. 폴더 접근 권한을 다시 확인해주세요.');
-        updateFileSystemStatus(false);
-        dbDirectoryHandle = null;
-        await clearDirectoryHandleFromDB();
-    }
-}
-
-async function loadDataFromFile() {
-    if (!dbDirectoryHandle) return;
-    
-    // 데이터를 불러오기 전에 항상 권한을 확인하고 필요한 경우 요청합니다.
-    if (!(await verifyPermission(dbDirectoryHandle))) {
-        updateFileSystemStatus(false, '권한이 필요합니다. 폴더를 다시 연결해 주세요.');
-        // 권한이 없으면 여기서 중단하고, 로컬 스토리지 데이터가 화면에 표시되도록 합니다.
-        loadDataFromLocalStorage();
-        return;
-    }
-
-    try {
-        const fileHandle = await dbDirectoryHandle.getFileHandle(DB_FILE_NAME);
-        const file = await fileHandle.getFile();
-        const content = await file.text();
-        const data = JSON.parse(content);
-
-        // 파일 내용을 로컬스토리지에 저장
-        if (data.companyInfo) {
-            localStorage.setItem('companyInfo', JSON.stringify(data.companyInfo));
-        }
-        if (data.customers) {
-            localStorage.setItem('customers', JSON.stringify(data.customers));
-        }
-        
-        console.log('파일에서 데이터를 성공적으로 불러왔습니다.');
-
-    } catch (error) {
-        if (error.name === 'NotFoundError') {
-            console.log('데이터베이스 파일이 없어 새로 생성합니다.');
-        } else {
-            console.error('파일에서 데이터 로드 실패:', error);
-            alert('연결된 폴더에서 데이터를 불러오는 데 실패했습니다.');
-        }
-    } finally {
-        // 파일 로드 후, 화면에 데이터 반영
-        loadDataFromLocalStorage();
-    }
-}
-
-// --- IndexedDB Helper Functions ---
-function getDirectoryHandleFromDB() {
-    return new Promise((resolve) => {
-        const request = indexedDB.open('file-system-db', 1);
-        request.onupgradeneeded = () => {
-            request.result.createObjectStore('handles', { keyPath: 'id' });
-        };
-        request.onsuccess = () => {
-            const db = request.result;
-            const transaction = db.transaction('handles', 'readonly');
-            const store = transaction.objectStore('handles');
-            const getRequest = store.get('directory');
-            getRequest.onsuccess = () => {
-                resolve(getRequest.result ? getRequest.result.handle : null);
-            };
-            getRequest.onerror = () => resolve(null);
-        };
-        request.onerror = () => resolve(null);
     });
-}
 
-function setDirectoryHandleInDB(handle) {
-    return new Promise((resolve, reject) => {
-        const request = indexedDB.open('file-system-db', 1);
-        request.onsuccess = () => {
-            const db = request.result;
-            const transaction = db.transaction('handles', 'readwrite');
-            const store = transaction.objectStore('handles');
-            store.put({ id: 'directory', handle }).onsuccess = () => resolve();
-            transaction.onerror = () => reject(transaction.error);
-        };
-        request.onerror = () => reject(request.error);
-    });
-}
-
-function clearDirectoryHandleFromDB() {
-    // 핸들 삭제 로직 (필요 시 구현)
-}
-
-async function verifyPermission(handle, options = { request: true }) {
-    const permOpts = { mode: 'readwrite' };
-    // 현재 권한 상태 확인
-    if ((await handle.queryPermission(permOpts)) === 'granted') {
-        return true;
-    }
-    // 권한 요청이 허용된 경우에만 요청
-    if (options.request && (await handle.requestPermission(permOpts)) === 'granted') {
-        return true;
-    }
-    // 그 외의 경우 (denied 또는 prompt인데 요청하지 않은 경우)
-    return false;
+    localStorage.setItem('sentNotifications', JSON.stringify([...sentNotifications]));
 }
 
 function updateTotalAmount() {
     let total = 0;
     document.querySelectorAll('#workItems .work-item').forEach(item => {
-        const quantity = parseFloat(item.querySelector('.work-quantity').value.replace(/,/g, '')) || 0;
-        const price = parseFloat(item.querySelector('.work-price').value.replace(/,/g, '')) || 0;
+        const quantity = parseFloat(item.querySelector('.work-quantity').value) || 0;
+        const price = parseFloat(item.querySelector('.work-price').value) || 0;
         total += quantity * price;
     });
 
@@ -322,7 +167,6 @@ function saveCompanyInfo() {
     };
     
     localStorage.setItem('companyInfo', JSON.stringify(companyInfo));
-    saveDataToFile(); // 파일에 저장
 
     const messageDiv = document.getElementById('companySavedMessage');
     messageDiv.style.display = 'block';
@@ -359,35 +203,83 @@ function addWorkItem(itemData = null) {
     newItem.className = 'work-item';
     
     const name = itemData ? itemData.name : '';
-    const quantity = itemData && itemData.quantity ? Number(itemData.quantity).toLocaleString() : '';
+    const quantity = itemData ? itemData.quantity : '';
     const unit = itemData ? itemData.unit : '';
-    const price = itemData && itemData.price ? Number(itemData.price).toLocaleString() : '';
+    const price = itemData ? itemData.price : '';
 
     newItem.innerHTML = `
         <input type="text" placeholder="공사 항목" class="work-name" value="${name}">
-        <input type="text" placeholder="수량" class="work-quantity" value="${quantity}" oninput="formatNumberInput(this); updateTotalAmount();">
+        <input type="number" placeholder="수량" class="work-quantity" value="${quantity}">
         <input type="text" placeholder="단위" class="work-unit" value="${unit}">
-        <input type="text" placeholder="단가" class="work-price" value="${price}" oninput="formatNumberInput(this); updateTotalAmount();">
+        <input type="number" placeholder="단가" class="work-price" value="${price}">
         <button onclick="removeWorkItem(this)">삭제</button>
     `;
     workItemsContainer.appendChild(newItem);
+
+    newItem.querySelectorAll('.work-quantity, .work-price').forEach(input => {
+        input.addEventListener('input', updateTotalAmount);
+    });
+}
+
+function showFontGuide() {
+    document.getElementById('fontGuideModal').style.display = 'flex';
+}
+
+function closeFontGuideModal() {
+    document.getElementById('fontGuideModal').style.display = 'none';
+}
+
+// Base64 인코딩을 위한 헬퍼 함수
+function arrayBufferToBase64(buffer) {
+    let binary = '';
+    const bytes = new Uint8Array(buffer);
+    const len = bytes.byteLength;
+    for (let i = 0; i < len; i++) {
+        binary += String.fromCharCode(bytes[i]);
+    }
+    return window.btoa(binary);
+}
+
+// 폰트 로드 함수
+async function loadFont() {
+    if (nanumGothicFont) {
+        return; // 이미 로드되었으면 함수 종료
+    }
+
+    const loadingOverlay = document.getElementById('loadingOverlay');
+    const originalText = loadingOverlay.querySelector('p').textContent;
+    loadingOverlay.querySelector('p').textContent = '최초 실행 시 폰트를 로딩합니다. 잠시만 기다려주세요...';
+    loadingOverlay.style.display = 'flex';
+
+    try {
+        const response = await fetch('./fonts/NanumGothic.ttf');
+        if (!response.ok) {
+            throw new Error('폰트 파일을 불러오는 데 실패했습니다.');
+        }
+        const fontBuffer = await response.arrayBuffer();
+        nanumGothicFont = arrayBufferToBase64(fontBuffer);
+    } catch (error) {
+        console.error(error);
+        alert(error.message);
+        throw error; // 에러를 다시 던져서 PDF 생성 중단
+    } finally {
+        loadingOverlay.style.display = 'none';
+        loadingOverlay.querySelector('p').textContent = originalText;
+    }
 }
 
 async function generatePDF() {
     const loadingOverlay = document.getElementById('loadingOverlay');
     try {
-        if (typeof window.font === 'undefined') {
-            alert('PDF 생성에 필요한 폰트 파일(font.js)이 로드되지 않았습니다. 페이지를 새로고침하고 다시 시도해 주세요.');
-            console.error('font.js가 로드되지 않았습니다.');
-            return;
-        }
+        await loadFont(); // 폰트 로드 (필요한 경우)
 
         loadingOverlay.style.display = 'flex';
 
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF();
         
-        doc.addFileToVFS('NanumGothic.ttf', window.font);
+        // 폰트 추가 및 설정
+        doc.addFileToVFS('NanumGothic.ttf', nanumGothicFont);
         doc.addFont('NanumGothic.ttf', 'NanumGothic', 'normal');
         doc.setFont('NanumGothic');
 
@@ -408,33 +300,23 @@ async function generatePDF() {
         const workItems = [];
         document.querySelectorAll('#workItems .work-item').forEach(item => {
             const name = item.querySelector('.work-name').value;
-            const quantity = item.querySelector('.work-quantity').value.replace(/,/g, '');
+            const quantity = item.querySelector('.work-quantity').value;
             const unit = item.querySelector('.work-unit').value;
-            const price = item.querySelector('.work-price').value.replace(/,/g, '');
+            const price = item.querySelector('.work-price').value;
             if (name) {
                 workItems.push({ name, quantity, unit, price });
             }
         });
 
-        // --- PDF 디자인 개선 ---
-        const primaryColor = [22, 160, 133];
-        const lightGrayColor = [245, 245, 245];
-
-        // Header
-        doc.setFontSize(26);
-        doc.setFont(undefined, 'bold');
-        doc.setTextColor.apply(null, primaryColor);
-        doc.text("견 적 서", 105, 25, { align: 'center' });
-        doc.setFont(undefined, 'normal');
-        doc.setTextColor(0, 0, 0);
-
+        // --- PDF 내용 생성 (한글로 복원) ---
+        doc.setFontSize(22);
+        doc.text("견 적 서", 105, 20, { align: 'center' });
+        
         doc.setFontSize(10);
-        doc.text(`견적일: ${estimateDate}`, 195, 40, { align: 'right' });
+        doc.text(`견적일: ${estimateDate}`, 195, 30, { align: 'right' });
 
-        // 공급자/공급받는자 정보
-        const infoTableStartY = 50;
         doc.autoTable({
-            startY: infoTableStartY,
+            startY: 35,
             head: [['공급자 (회사 정보)']],
             body: [
                 [`회사명: ${companyName}`],
@@ -443,12 +325,11 @@ async function generatePDF() {
                 [`주소: ${address}`]
             ],
             theme: 'grid',
-            styles: { font: 'NanumGothic', fontSize: 9 },
-            headStyles: { fillColor: primaryColor, textColor: 255, font: 'NanumGothic', fontStyle: 'bold' }
+            styles: { font: 'NanumGothic', fontStyle: 'normal' },
+            headStyles: { font: 'NanumGothic', fontStyle: 'bold' }
         });
         
         doc.autoTable({
-            startY: infoTableStartY,
             head: [['공급받는 자 (고객 정보)']],
             body: [
                 [`현장명: ${siteName}`],
@@ -458,54 +339,34 @@ async function generatePDF() {
                 [`제출 마감일: ${deadlineDate || '없음'}`]
             ],
             theme: 'grid',
-            styles: { font: 'NanumGothic', fontSize: 9 },
-            headStyles: { fillColor: primaryColor, textColor: 255, font: 'NanumGothic', fontStyle: 'bold' },
-            margin: { left: 108 }
+            styles: { font: 'NanumGothic', fontStyle: 'normal' },
+            headStyles: { font: 'NanumGothic', fontStyle: 'bold' }
         });
         
-        // 공사 내용
         const workItemsBody = workItems.map((item, index) => [
-            index + 1,
-            item.name,
-            item.quantity ? Number(item.quantity).toLocaleString() : '0',
-            item.unit,
+            index + 1, item.name, item.quantity || '0', item.unit,
             item.price ? Number(item.price).toLocaleString() : '0',
             (item.quantity && item.price) ? (Number(item.quantity) * Number(item.price)).toLocaleString() : '0'
         ]);
         
         doc.autoTable({
-            startY: doc.autoTable.previous.finalY + 10,
             head: [['No.', '공사 항목', '수량', '단위', '단가', '금액']],
             body: workItemsBody,
-            theme: 'striped',
-            headStyles: { halign: 'center', fillColor: primaryColor, textColor: 255, font: 'NanumGothic', fontStyle: 'bold', fontSize: 10 },
-            bodyStyles: { font: 'NanumGothic', fontSize: 9 },
-            footStyles: { font: 'NanumGothic', fontStyle: 'bold' },
-            alternateRowStyles: { fillColor: lightGrayColor }
+            headStyles: { halign: 'center', font: 'NanumGothic', fontStyle: 'bold' },
+            styles: { font: 'NanumGothic', fontStyle: 'normal' }
         });
         
-        // 총 금액 강조
         const finalY = doc.autoTable.previous.finalY;
-        doc.setFillColor.apply(null, lightGrayColor);
-        doc.rect(14, finalY + 5, 182, 12, 'F');
         doc.setFontSize(12);
-        doc.setFont(undefined, 'bold');
-        doc.setTextColor(30, 30, 30);
-        doc.text('총 견적 금액', 20, finalY + 12.5);
-        doc.setTextColor.apply(null, primaryColor);
-        doc.text(totalAmount, 196, finalY + 12.5, { align: 'right' });
-        doc.setTextColor(0,0,0);
-        doc.setFont(undefined, 'normal');
-
-        // 특이사항
-        doc.setFontSize(11);
-        doc.setFont(undefined, 'bold');
-        doc.text("특이사항", 14, finalY + 28);
-        doc.setFont(undefined, 'normal');
-        doc.setFontSize(9);
-        doc.text(notes || '없음', 14, finalY + 34, {
-            maxWidth: 182,
-            lineHeightFactor: 1.5
+        doc.text(`총 견적 금액: ${totalAmount}`, 195, finalY + 10, { align: 'right' });
+        
+        doc.setFontSize(10);
+        doc.text("특이사항", 14, finalY + 20);
+        doc.autoTable({
+            startY: finalY + 22,
+            body: [[notes || '없음']],
+            theme: 'plain',
+            styles: { font: 'NanumGothic' }
         });
 
         const pdfBlob = doc.output('blob');
@@ -519,6 +380,7 @@ async function generatePDF() {
 
     } catch(e) {
         console.error("PDF 생성 중 오류 발생:", e);
+        // 오류가 발생했더라도 로딩 오버레이는 숨김
     } finally {
         loadingOverlay.style.display = 'none';
     }
@@ -543,9 +405,9 @@ function saveEstimate(showAlert = false) {
 
     document.querySelectorAll('#workItems .work-item').forEach(item => {
         const name = item.querySelector('.work-name').value;
-        const quantity = item.querySelector('.work-quantity').value.replace(/,/g, '');
+        const quantity = item.querySelector('.work-quantity').value;
         const unit = item.querySelector('.work-unit').value;
-        const price = item.querySelector('.work-price').value.replace(/,/g, '');
+        const price = item.querySelector('.work-price').value;
         if (name) {
             customer.workItems.push({ name, quantity, unit, price });
         }
@@ -580,8 +442,6 @@ function saveEstimate(showAlert = false) {
     const sentNotifications = new Set(JSON.parse(localStorage.getItem('sentNotifications')) || []);
     sentNotifications.delete(customer.id);
     localStorage.setItem('sentNotifications', JSON.stringify([...sentNotifications]));
-
-    saveDataToFile(); // 파일에 저장
 }
 
 function loadCustomers() {
@@ -646,7 +506,6 @@ function deleteCustomer(event, customerId) {
         let customers = JSON.parse(localStorage.getItem('customers')) || [];
         customers = customers.filter(c => c.id !== customerId);
         localStorage.setItem('customers', JSON.stringify(customers));
-        saveDataToFile(); // 파일에 저장
         loadCustomers();
     }
 }
@@ -685,8 +544,7 @@ function viewEstimateDetails(event, customerId) {
 }
 
 function clearEstimateForm() {
-    const form = document.querySelector('#estimatePage .form-container');
-    form.reset();
+    document.getElementById('estimatePage').querySelector('form').reset();
     document.getElementById('workItems').innerHTML = '';
     addWorkItem();
     document.getElementById('estimateDate').value = new Date().toISOString().split('T')[0];
@@ -709,14 +567,58 @@ function formatPhoneNumber(input) {
     }
 }
 
-function formatNumberInput(input) {
-    if (!input) return;
-    let value = input.value.replace(/[^0-9]/g, ''); // 숫자 이외의 문자 제거
-    if (value) {
-        input.value = parseInt(value, 10).toLocaleString('ko-KR');
-    } else {
-        input.value = '';
+function exportData() {
+    try {
+        const data = {
+            companyInfo: JSON.parse(localStorage.getItem('companyInfo')),
+            customers: JSON.parse(localStorage.getItem('customers')),
+            font: localStorage.getItem('customFont')
+        };
+        const dataStr = JSON.stringify(data, null, 2);
+        const blob = new Blob([dataStr], {type: "application/json"});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        const date = new Date().toISOString().slice(0,10).replace(/-/g,"");
+        a.download = `estimate_backup_${date}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+        alert('데이터가 성공적으로 내보내졌습니다.');
+    } catch (error) {
+        console.error('데이터 내보내기 실패:', error);
+        alert('데이터 내보내기에 실패했습니다.');
     }
+}
+
+function importData() {
+    document.getElementById('importFile').click();
+}
+
+function handleFileImport(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        try {
+            const data = JSON.parse(e.target.result);
+            if (confirm('데이터를 불러오면 현재 모든 데이터가 덮어씌워집니다. 계속하시겠습니까?')) {
+                if(data.companyInfo) localStorage.setItem('companyInfo', JSON.stringify(data.companyInfo));
+                if(data.customers) localStorage.setItem('customers', JSON.stringify(data.customers));
+                if(data.font) {
+                    localStorage.setItem('customFont', data.font);
+                    window.font = data.font;
+                }
+                alert('데이터를 성공적으로 불러왔습니다. 페이지를 새로고침합니다.');
+                location.reload();
+            }
+        } catch (error) {
+            alert('데이터 파일이 손상되었거나 잘못된 형식입니다.');
+        } finally {
+            event.target.value = '';
+        }
+    };
+    reader.readAsText(file);
 }
 
 function closePdfActionModal() {
@@ -779,9 +681,12 @@ window.searchCustomers = searchCustomers;
 window.deleteCustomer = deleteCustomer;
 window.viewEstimateDetails = viewEstimateDetails;
 window.saveCompanyInfo = saveCompanyInfo;
+window.showFontGuide = showFontGuide;
+window.closeFontGuideModal = closeFontGuideModal;
+window.exportData = exportData;
+window.importData = importData;
+window.handleFileImport = handleFileImport;
 window.closePdfActionModal = closePdfActionModal;
 window.downloadPDF = downloadPDF;
 window.sharePDF = sharePDF;
 window.clearAllData = clearAllData;
-window.formatNumberInput = formatNumberInput;
-window.connectFileSystem = connectFileSystem;

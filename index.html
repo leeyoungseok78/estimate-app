@@ -103,9 +103,9 @@
                 <div class="work-items" id="workItems">
                     <div class="work-item">
                         <input type="text" placeholder="공사 항목" class="work-name">
-                        <input type="text" placeholder="수량" class="work-quantity" oninput="formatNumberInput(this)">
+                        <input type="number" placeholder="수량" class="work-quantity">
                         <input type="text" placeholder="단위" class="work-unit">
-                        <input type="text" placeholder="단가" class="work-price" oninput="formatNumberInput(this); updateTotalAmount();">
+                        <input type="number" placeholder="단가" class="work-price">
                         <button onclick="removeWorkItem(this)">삭제</button>
                     </div>
                 </div>
@@ -202,16 +202,12 @@
 
             <!-- 데이터 관리 -->
             <div class="section">
-                <div class="section-title">데이터 관리 (자동 저장)</div>
-                <p class="description">
-                    PC나 스마트폰의 특정 폴더를 지정하여 데이터를 안전하게 파일로 관리합니다. 한번 연결하면 모든 정보가 해당 폴더에 자동으로 저장되고 불러와집니다.
-                </p>
+                <div class="section-title">데이터 관리</div>
                 <div class="btn-group">
-                    <button class="btn btn-primary" onclick="connectFileSystem()">📂 데이터 폴더 연결</button>
+                    <button class="btn btn-secondary" onclick="exportData()">데이터 내보내기</button>
+                    <button class="btn btn-secondary" onclick="importData()">데이터 불러오기</button>
                 </div>
-                <div id="fileSystemStatus" class="status-message">
-                    연결 상태: <span class="status-disconnected">연결되지 않음</span>
-                </div>
+                <input type="file" id="importFile" accept=".json" style="display: none;" onchange="handleFileImport(event)">
             </div>
 
             <!-- 앱 정보 -->
@@ -234,6 +230,40 @@
         <div style="margin-bottom: 10px;">📱 홈화면에 앱으로 추가하세요!</div>
         <button onclick="installApp()">설치하기</button>
         <button onclick="document.getElementById('installBanner').style.display = 'none';">나중에</button>
+    </div>
+
+    <!-- 폰트 가이드 모달 -->
+    <div id="fontGuideModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>PDF 한글 폰트 설정 방법</h3>
+                <span class="close-modal" onclick="closeFontGuideModal()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <ol>
+                    <li>
+                        <strong>나눔고딕 폰트(.ttf) 파일을 다운로드합니다.</strong><br>
+                        <a href="https://hangeul.naver.com/font" target="_blank">네이버 나눔고딕 다운로드</a>에서 다운로드 가능합니다.
+                    </li>
+                    <li>
+                        <strong>위의 '폰트 파일' 선택 버튼을 클릭하여 다운로드한 .ttf 파일을 선택합니다.</strong><br>
+                        선택한 폰트는 자동으로 변환되어 앱에 저장됩니다.
+                    </li>
+                    <li>
+                        <strong>이제 PDF 생성 시 한글이 정상적으로 표시됩니다.</strong><br>
+                        폰트 설정은 브라우저 저장소에 유지되므로 한 번만 설정하면 됩니다.
+                    </li>
+                </ol>
+                <div class="font-guide-note">
+                    <p><strong>참고:</strong> 폰트 파일은 브라우저 내에서만 사용되며, 외부로 전송되지 않습니다.</p>
+                    <p><strong>주의:</strong> 폰트 파일이 너무 크면 저장에 실패할 수 있습니다. 가능하면 2MB 이하의 폰트 파일을 사용하세요.</p>
+                    <p><strong>권장:</strong> 나눔고딕 Light 또는 Regular 버전을 사용하시면 파일 크기가 작아 저장이 원활합니다.</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button onclick="closeFontGuideModal()">확인</button>
+            </div>
+        </div>
     </div>
 
     <input type="hidden" id="editingEstimateId">
@@ -264,7 +294,6 @@
     <!-- 모든 스크립트를 body 맨 끝으로 이동하여 로딩 오류를 근본적으로 해결 -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
-    <script src="./font.js"></script>
     <script src="./script.js"></script>
 </body>
 </html>

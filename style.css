@@ -338,19 +338,21 @@ body {
 }
 
 .card-actions .btn-action-text {
-    background: none;
-    border: none;
-    color: #4A5568; /* Gray-700 */
-    cursor: pointer;
     font-size: 14px;
-    padding: 4px 8px;
-    margin-left: 8px;
-    border-radius: 4px;
+    padding: 6px 12px;
+    background-color: #f1f3f5;
+    border: 1px solid #dee2e6;
+    border-radius: 5px;
+    cursor: pointer;
+    font-weight: 500;
+    color: #343a40;
+    transition: background-color 0.2s;
 }
 
-.card-actions .btn-action-text:hover {
-    background-color: #E2E8F0; /* Gray-200 */
-    color: #2D3748; /* Gray-800 */
+.card-actions .btn-action-text:hover,
+.card-actions .btn-action-text:active {
+    background-color: #e9ecef;
+    border-color: #ced4da;
 }
 
 .card-body p {
@@ -751,28 +753,4 @@ input[type="file"] {
 @keyframes spin {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
-}
-
-/* 데이터 관리 섹션 */
-.description {
-    font-size: 14px;
-    color: #4A5568;
-    margin-bottom: 15px;
-    line-height: 1.6;
-}
-
-.status-message {
-    margin-top: 15px;
-    font-size: 14px;
-    color: #718096;
-}
-
-.status-connected {
-    color: #48BB78; /* Green-500 */
-    font-weight: bold;
-}
-
-.status-disconnected {
-    color: #F56565; /* Red-500 */
-    font-weight: bold;
 } 
