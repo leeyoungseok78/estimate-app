@@ -556,9 +556,9 @@ function addWorkItem(itemData = null) {
 
     newItem.innerHTML = `
         <input type="text" placeholder="공사 항목" class="work-name" value="${name}">
-        <input type="text" placeholder="수량" class="work-quantity" value="${quantity}" oninput="formatNumber(this)">
+        <input type="text" inputmode="numeric" pattern="[0-9,]*" placeholder="수량" class="work-quantity" value="${quantity}" oninput="formatNumber(this)">
         <input type="text" placeholder="단위" class="work-unit" value="${unit}" list="unitOptions">
-        <input type="text" placeholder="단가" class="work-price" value="${price}" oninput="formatNumber(this)">
+        <input type="text" inputmode="numeric" pattern="[0-9,]*" placeholder="단가" class="work-price" value="${price}" oninput="formatNumber(this)">
         <button onclick="removeWorkItem(this)">삭제</button>
     `;
     workItemsContainer.appendChild(newItem);
@@ -783,23 +783,33 @@ async function saveEstimate(showAlert = false) {
         return;
     }
     
-    // 고객 데이터 로드
-    let customers = await loadData(STORES.CUSTOMERS) || [];
-    
-    const editingId = document.getElementById('editingEstimateId').value;
-    const existingIndex = editingId ? customers.findIndex(c => c.id === editingId) : -1;
+    try {
+        // 고객 데이터 로드
+        let customers = await loadData(STORES.CUSTOMERS) || [];
+        
+        const editingId = document.getElementById('editingEstimateId').value;
+        const existingIndex = editingId ? customers.findIndex(c => c.id === editingId) : -1;
 
-    if (existingIndex > -1) {
-        customers[existingIndex] = customer;
-    } else {
-        customers.unshift(customer);
-    }
-    
-    // 고객 데이터 저장
-    await saveData(STORES.CUSTOMERS, customers);
-    
-    if (showAlert) {
-        alert('견적이 저장되었습니다.');
+        if (existingIndex > -1) {
+            customers[existingIndex] = customer;
+        } else {
+            customers.unshift(customer);
+        }
+        
+        // 고객 데이터 저장
+        await saveData(STORES.CUSTOMERS, customers);
+        
+        // 고객 목록 새로고침
+        loadCustomers();
+        
+        if (showAlert) {
+            alert('견적이 저장되었습니다.');
+        }
+    } catch (error) {
+        console.error('견적 저장 중 오류 발생:', error);
+        if (showAlert) {
+            alert('견적 저장 중 오류가 발생했습니다.');
+        }
     }
 }
 
