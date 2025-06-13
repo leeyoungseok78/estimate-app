@@ -111,9 +111,6 @@ function main() {
         });
     });
 
-    // 앱 초기 로드 시, 저장된 사용자 폰트가 있는지 확인
-    loadSavedFontData();
-
     setTimeout(() => {
         if (deferredPrompt && !window.matchMedia('(display-mode: standalone)').matches) {
             showInstallBanner();
@@ -244,37 +241,6 @@ function main() {
         newItem.querySelectorAll('.work-quantity, .work-price').forEach(input => {
             input.addEventListener('input', updateTotalAmount);
         });
-    }
-
-    function handleFontUpload(event) {
-        const file = event.target.files[0];
-        if (!file) return;
-
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            const fontData = e.target.result.split(',')[1];
-            try {
-                localStorage.setItem('customFont', fontData);
-                window.font = fontData; // 전역 변수에도 할당
-                updateFontStatus(true, `'${file.name}' 폰트가 저장되었습니다.`);
-            } catch (error) {
-                if (error.name === 'QuotaExceededError') {
-                    updateFontStatus(false, '저장 공간이 부족합니다. 폰트 파일이 너무 클 수 있습니다.');
-                } else {
-                    updateFontStatus(false, '폰트 저장 중 오류가 발생했습니다.');
-                }
-            }
-        };
-        reader.onerror = () => {
-            updateFontStatus(false, '폰트 파일을 읽는 데 실패했습니다.');
-        };
-        reader.readAsDataURL(file);
-    }
-
-    function updateFontStatus(success, message) {
-        const fontStatus = document.getElementById('fontStatus');
-        fontStatus.textContent = message;
-        fontStatus.className = `font-status ${success ? 'success' : 'error'}`;
     }
 
     function showFontGuide() {
@@ -510,8 +476,8 @@ function main() {
                     <div class="card-header">
                         <strong>${customer.siteName || '이름 없는 현장'}</strong>
                         <div class="card-actions">
-                            <button class="btn-icon" onclick="viewEstimateDetails(event, '${customer.id}')">✏️</button>
-                            <button class="btn-icon" onclick="deleteCustomer(event, '${customer.id}')">🗑️</button>
+                            <button class="btn-action-text" onclick="viewEstimateDetails(event, '${customer.id}')">수정</button>
+                            <button class="btn-action-text" onclick="deleteCustomer(event, '${customer.id}')">삭제</button>
                         </div>
                     </div>
                     <div class="card-body">
@@ -707,7 +673,6 @@ function main() {
     window.deleteCustomer = deleteCustomer;
     window.viewEstimateDetails = viewEstimateDetails;
     window.saveCompanyInfo = saveCompanyInfo;
-    window.handleFontUpload = handleFontUpload;
     window.showFontGuide = showFontGuide;
     window.closeFontGuideModal = closeFontGuideModal;
     window.exportData = exportData;
