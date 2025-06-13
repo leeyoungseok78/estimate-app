@@ -9,899 +9,706 @@ function loadScript(src) {
     });
 }
 
-// jspdf-autotable 로드
+// jspdf-autotable 로드 후 앱 실행
 loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js')
     .then(() => {
         console.log('jspdf-autotable loaded successfully');
+        main(); // 라이브러리 로드 후 메인 로직 실행
     })
     .catch(error => {
         console.error(error);
         alert('PDF 기능을 위한 필수 라이브러리를 로드하지 못했습니다. 인터넷 연결을 확인해주세요.');
     });
 
-// 폰트 변수는 font.js에서 전역으로 선언됨
+function main() {
+    // 폰트 변수는 font.js에서 전역으로 선언됨
 
-// PWA 관련 변수
-let deferredPrompt;
-let isInstalled = false;
+    // PWA 관련 변수
+    let deferredPrompt;
+    let isInstalled = false;
 
-// PDF 공유를 위한 전역 변수
-let generatedPdfDoc = null;
-let generatedPdfFile = null;
-let generatedPdfSiteName = '';
+    // PDF 공유를 위한 전역 변수
+    let generatedPdfDoc = null;
+    let generatedPdfFile = null;
+    let generatedPdfSiteName = '';
 
-// 페이지 전환 함수
-function showPage(pageName) {
-    document.querySelectorAll('.container').forEach(page => page.classList.remove('active'));
-    document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
-    
-    document.getElementById(pageName + 'Page').classList.add('active');
-    
-    const activeBtn = document.querySelector(`.nav-btn[data-page="${pageName}"]`);
-    if(activeBtn) activeBtn.classList.add('active');
-    
-    if (pageName === 'estimate') {
-        loadCompanyInfo();
-    } else if (pageName === 'customers') {
-        loadCustomers();
-    } else if (pageName === 'settings') {
-        loadSettingsCompanyInfo();
-    }
-}
-
-// 서비스 워커 등록
-if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-        navigator.serviceWorker.register('data:text/javascript;base64,Y29uc3QgQ0FDSEVfTkFNRSA9ICdkZW1vbGl0aW9uLWVzdGltYXRlLXYxJzsKY29uc3QgdXJsc1RvQ2FjaGUgPSBbJy4vJ107CnNlbGYuYWRkRXZlbnRMaXN0ZW5lcignaW5zdGFsbCcsIGV2ZW50ID0+IHsKICBldmVudC53YWl0VW50aWwoY2FjaGVzLm9wZW4oQ0FDSEVfTkFNRSkudGhlbihjYWNoZSA9PiBjYWNoZS5hZGRBbGwodXJsc1RvQ2FjaGUpKSk7Cn0pOwpzZWxmLmFkZEV2ZW50TGlzdGVuZXIoJ2ZldGNoJywgZXZlbnQgPT4gewogIGV2ZW50LnJlc3BvbmRXaXRoKGNhY2hlcy5tYXRjaChldmVudC5yZXF1ZXN0KS50aGVuKHJlc3BvbnNlID0+IHJlc3BvbnNlIHx8IGZldGNoKGV2ZW50LnJlcXVlc3QpKSk7Cn0pOw==')
-            .then(registration => console.log('SW registered'))
-            .catch(error => console.log('SW registration failed'));
-    });
-}
-
-// PWA 설치 관련
-window.addEventListener('beforeinstallprompt', (e) => {
-    e.preventDefault();
-    deferredPrompt = e;
-    showInstallBanner();
-});
-
-window.addEventListener('appinstalled', () => {
-    isInstalled = true;
-    hideInstallBanner();
-});
-
-function showInstallBanner() {
-    if (!isInstalled && !window.matchMedia('(display-mode: standalone)').matches) {
-        document.getElementById('installBanner').classList.add('show');
-    }
-}
-
-function hideInstallBanner() {
-    document.getElementById('installBanner').classList.remove('show');
-}
-
-function installApp() {
-    hideInstallBanner();
-    if (deferredPrompt) {
-        deferredPrompt.prompt();
-        deferredPrompt.userChoice.then((choiceResult) => {
-            if (choiceResult.outcome === 'accepted') {
-                console.log('User accepted the install prompt');
-            }
-            deferredPrompt = null;
-        });
-    }
-}
-
-function dismissInstall() {
-    hideInstallBanner();
-}
-
-// 초기화
-// type="module" 스크립트는 DOM 파싱이 완료된 후에 실행되므로,
-// DOMContentLoaded 이벤트 리스너로 감쌀 필요가 없습니다.
-document.getElementById('estimateDate').value = new Date().toISOString().split('T')[0];
-loadCompanyInfo();
-
-// 페이지 로드 시 기존 항목에 대한 금액 계산 이벤트 리스너 추가
-document.querySelectorAll('#workItems .work-quantity, #workItems .work-price').forEach(input => {
-    input.addEventListener('input', updateTotalAmount);
-});
-
-document.querySelectorAll('.nav-btn').forEach(btn => {
-    btn.addEventListener('click', function() {
-        const page = this.getAttribute('data-page');
-        showPage(page);
-    });
-});
-
-// 앱 초기 로드 시, 저장된 사용자 폰트가 있는지 확인
-document.addEventListener('DOMContentLoaded', loadSavedFontData);
-
-setTimeout(() => {
-    if (deferredPrompt && !window.matchMedia('(display-mode: standalone)').matches) {
-        showInstallBanner();
-    }
-}, 3000);
-
-// 알림 권한 요청 및 마감일 체크
-requestNotificationPermission();
-setInterval(checkDeadlines, 3600000); // 1시간마다 마감일 체크
-checkDeadlines(); // 앱 로드 시 즉시 체크
-
-// 알림 권한 요청
-function requestNotificationPermission() {
-    if ('Notification' in window && Notification.permission === 'default') {
-        Notification.requestPermission().then(permission => {
-            if (permission === 'granted') {
-                new Notification('알림이 활성화되었습니다!', {
-                    body: '견적 마감일을 놓치지 않도록 알려드릴게요.',
-                    icon: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0id2hpdGUiPjxwYXRoIGQ9Ik0xMiAyQzYuNDggMiAyIDYuNDggMiAxMnM0LjQ4IDEwIDEwIDEwIDEwLTQuNDggMTAtMTBTMTcuNTIgMiAxMiAyem0wIDE4Yy00LjQxIDAtOC0zLjU5LTgtOHMzLjU5LTggOC04IDggMy41OSA4IDgtMy41OSA4LTggOHptLTIuMDgtMTMuMDRMMTAgOC4wNGwyLjA4IDIuMDggMi4wOC0yLjA4TDE1LjIgOC4wNGwtMi4wOCAyLjA4IDIuMDggMi4wOEwxNC4xMiAxMy4ybC0yLjA4LTIuMDhMMTAgMTMuMmwtMS4wNC0xLjA0IDIuMDgtMi4wOHoiLz48L3N2Zz4='
-                });
-            }
-        });
-    }
-}
-
-// 마감일 체크 및 알림
-function checkDeadlines() {
-    if (!('Notification' in window) || Notification.permission !== 'granted') {
-        return; // 알림이 지원되지 않거나 권한이 없는 경우 중단
-    }
-
-    const customers = JSON.parse(localStorage.getItem('customers')) || [];
-    const sentNotifications = new Set(JSON.parse(localStorage.getItem('sentNotifications')) || []);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    customers.forEach(customer => {
-        if (customer.deadlineDate && !sentNotifications.has(customer.id)) {
-            const deadline = new Date(customer.deadlineDate);
-            deadline.setHours(0, 0, 0, 0);
-
-            const diffDays = (deadline - today) / (1000 * 60 * 60 * 24);
-
-            if (diffDays <= 1) { // 마감일이 오늘 또는 내일인 경우
-                new Notification(`'${customer.siteName}' 견적 마감 임박`, {
-                    body: `마감일: ${customer.deadlineDate}. 서둘러 제출해주세요!`,
-                    tag: `deadline-${customer.id}` // 같은 알림 중복 방지
-                });
-                
-                const alarm = document.getElementById('alarmSound');
-                if (alarm) alarm.play().catch(e => console.log("알람 소리 재생 실패:", e));
-                
-                sentNotifications.add(customer.id);
-            }
+    // 페이지 전환 함수
+    function showPage(pageName) {
+        document.querySelectorAll('.container').forEach(page => page.classList.remove('active'));
+        document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
+        
+        document.getElementById(pageName + 'Page').classList.add('active');
+        
+        const activeBtn = document.querySelector(`.nav-btn[data-page="${pageName}"]`);
+        if(activeBtn) activeBtn.classList.add('active');
+        
+        if (pageName === 'estimate') {
+            loadCompanyInfo();
+        } else if (pageName === 'customers') {
+            loadCustomers();
+        } else if (pageName === 'settings') {
+            loadSettingsCompanyInfo();
         }
-    });
-
-    localStorage.setItem('sentNotifications', JSON.stringify([...sentNotifications]));
-}
-
-// 총 견적 금액 실시간 업데이트
-function updateTotalAmount() {
-    let total = 0;
-    document.querySelectorAll('#workItems .work-item').forEach(item => {
-        const quantity = parseFloat(item.querySelector('.work-quantity').value) || 0;
-        const price = parseFloat(item.querySelector('.work-price').value) || 0;
-        total += quantity * price;
-    });
-
-    document.getElementById('totalAmount').textContent = `${total.toLocaleString()}원`;
-}
-
-// 회사 정보 관리
-function saveCompanyInfo() {
-    const companyInfo = {
-        name: document.getElementById('settingsCompanyName').value,
-        manager: document.getElementById('settingsManager').value,
-        phone: document.getElementById('settingsPhone').value,
-        address: document.getElementById('settingsAddress').value
-    };
-    
-    const companyData = JSON.stringify(companyInfo);
-    try {
-        localStorage.setItem('companyInfo', companyData);
-    } catch (e) {
-        window.companyInfo = companyData; // fallback
     }
 
-    const messageDiv = document.getElementById('companySavedMessage');
-    messageDiv.style.display = 'block';
+    // 서비스 워커 등록
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('data:text/javascript;base64,Y29uc3QgQ0FDSEVfTkFNRSA9ICdkZW1vbGl0aW9uLWVzdGltYXRlLXYxJzsKY29uc3QgdXJsc1RvQ2FjaGUgPSBbJy4vJ107CnNlbGYuYWRkRXZlbnRMaXN0ZW5lcignaW5zdGFsbCcsIGV2ZW50ID0+IHsKICBldmVudC53YWl0VW50aWwoY2FjaGVzLm9wZW4oQ0FDSEVfTkFNRSkudGhlbihjYWNoZSA9PiBjYWNoZS5hZGRBbGwodXJsc1RvQ2FjaGUpKSk7Cn0pOwpzZWxmLmFkZEV2ZW50TGlzdGVuZXIoJ2ZldGNoJywgZXZlbnQgPT4gewogIGV2ZW50LnJlc3BvbmRXaXRoKGNhY2hlcy5tYXRjaChldmVudC5yZXF1ZXN0KS50aGVuKHJlc3BvbnNlID0+IHJlc3BvbnNlIHx8IGZldGNoKGV2ZW50LnJlcXVlc3QpKSk7Cn0pOw==')
+                .then(registration => console.log('SW registered'))
+                .catch(error => console.log('SW registration failed'));
+        });
+    }
+
+    // PWA 설치 관련
+    window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferredPrompt = e;
+        showInstallBanner();
+    });
+
+    window.addEventListener('appinstalled', () => {
+        isInstalled = true;
+        hideInstallBanner();
+    });
+
+    function showInstallBanner() {
+        if (!isInstalled && !window.matchMedia('(display-mode: standalone)').matches) {
+            document.getElementById('installBanner').classList.add('show');
+        }
+    }
+
+    function hideInstallBanner() {
+        document.getElementById('installBanner').classList.remove('show');
+    }
+
+    function installApp() {
+        hideInstallBanner();
+        if (deferredPrompt) {
+            deferredPrompt.prompt();
+            deferredPrompt.userChoice.then((choiceResult) => {
+                if (choiceResult.outcome === 'accepted') {
+                    console.log('User accepted the install prompt');
+                }
+                deferredPrompt = null;
+            });
+        }
+    }
+
+    // 초기화
+    document.getElementById('estimateDate').value = new Date().toISOString().split('T')[0];
+    loadCompanyInfo();
+
+    // 페이지 로드 시 기존 항목에 대한 금액 계산 이벤트 리스너 추가
+    document.querySelectorAll('#workItems .work-quantity, #workItems .work-price').forEach(input => {
+        input.addEventListener('input', updateTotalAmount);
+    });
+
+    document.querySelectorAll('.nav-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const page = this.getAttribute('data-page');
+            showPage(page);
+        });
+    });
+
+    // 앱 초기 로드 시, 저장된 사용자 폰트가 있는지 확인
+    loadSavedFontData();
+
     setTimeout(() => {
-        messageDiv.style.display = 'none';
-    }, 2000);
-}
+        if (deferredPrompt && !window.matchMedia('(display-mode: standalone)').matches) {
+            showInstallBanner();
+        }
+    }, 3000);
 
-function loadCompanyInfo() {
-    let companyInfo;
-    try {
-        companyInfo = JSON.parse(localStorage.getItem('companyInfo'));
-    } catch (e) {
-        companyInfo = window.companyInfo;
+    // 알림 권한 요청 및 마감일 체크
+    requestNotificationPermission();
+    setInterval(checkDeadlines, 3600000); // 1시간마다 마감일 체크
+    checkDeadlines(); // 앱 로드 시 즉시 체크
+
+    function requestNotificationPermission() {
+        if ('Notification' in window && Notification.permission === 'default') {
+            Notification.requestPermission().then(permission => {
+                if (permission === 'granted') {
+                    new Notification('알림이 활성화되었습니다!', {
+                        body: '견적 마감일을 놓치지 않도록 알려드릴게요.',
+                        icon: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0id2hpdGUiPjxwYXRoIGQ9Ik0xMiAyQzYuNDggMiAyIDYuNDggMiAxMnM0LjQ4IDEwIDEwIDEwIDEwLTQuNDggMTAtMTBTMTcuNTIgMiAxMiAyem0wIDE4Yy00LjQxIDAtOC0zLjU5LTgtOHMzLjU5LTggOC04IDggMy41OSA4IDgtMy41OSA4LTggOHptLTIuMDgtMTMuMDRMMTAgOC4wNGwyLjA4IDIuMDggMi4wOC0yLjA4TDE1LjIgOC4wNGwtMi4wOCAyLjA4IDIuMDggMi4wOEwxNC4xMiAxMy4ybC0yLjA4LTIuMDhMMTAgMTMuMmwtMS4wNC0xLjA0IDIuMDgtMi4wOHoiLz48L3N2Zz4='
+                    });
+                }
+            });
+        }
     }
-    
-    if (companyInfo) {
+
+    function checkDeadlines() {
+        if (!('Notification' in window) || Notification.permission !== 'granted') {
+            return;
+        }
+
+        const customers = JSON.parse(localStorage.getItem('customers')) || [];
+        const sentNotifications = new Set(JSON.parse(localStorage.getItem('sentNotifications')) || []);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        customers.forEach(customer => {
+            if (customer.deadlineDate && !sentNotifications.has(customer.id)) {
+                const deadline = new Date(customer.deadlineDate);
+                deadline.setHours(0, 0, 0, 0);
+
+                const diffDays = (deadline - today) / (1000 * 60 * 60 * 24);
+
+                if (diffDays <= 1) {
+                    new Notification(`'${customer.siteName}' 견적 마감 임박`, {
+                        body: `마감일: ${customer.deadlineDate}. 서둘러 제출해주세요!`,
+                        tag: `deadline-${customer.id}`
+                    });
+                    
+                    const alarm = document.getElementById('alarmSound');
+                    if (alarm) alarm.play().catch(e => console.log("알람 소리 재생 실패:", e));
+                    
+                    sentNotifications.add(customer.id);
+                }
+            }
+        });
+
+        localStorage.setItem('sentNotifications', JSON.stringify([...sentNotifications]));
+    }
+
+    function updateTotalAmount() {
+        let total = 0;
+        document.querySelectorAll('#workItems .work-item').forEach(item => {
+            const quantity = parseFloat(item.querySelector('.work-quantity').value) || 0;
+            const price = parseFloat(item.querySelector('.work-price').value) || 0;
+            total += quantity * price;
+        });
+
+        document.getElementById('totalAmount').textContent = `${total.toLocaleString()}원`;
+    }
+
+    function saveCompanyInfo() {
+        const companyInfo = {
+            name: document.getElementById('settingsCompanyName').value,
+            manager: document.getElementById('settingsManager').value,
+            phone: document.getElementById('settingsPhone').value,
+            address: document.getElementById('settingsAddress').value
+        };
+        
+        localStorage.setItem('companyInfo', JSON.stringify(companyInfo));
+
+        const messageDiv = document.getElementById('companySavedMessage');
+        messageDiv.style.display = 'block';
+        setTimeout(() => {
+            messageDiv.style.display = 'none';
+        }, 2000);
+    }
+
+    function loadCompanyInfo() {
+        const companyInfo = JSON.parse(localStorage.getItem('companyInfo')) || {};
         document.getElementById('companyName').value = companyInfo.name || '';
         document.getElementById('manager').value = companyInfo.manager || '';
         document.getElementById('phone').value = companyInfo.phone || '';
         formatPhoneNumber(document.getElementById('phone'));
     }
-}
 
-function loadSettingsCompanyInfo() {
-    let companyInfo;
-    try {
-        companyInfo = JSON.parse(localStorage.getItem('companyInfo'));
-    } catch (e) {
-        companyInfo = window.companyInfo;
-    }
-    
-    if (companyInfo) {
+    function loadSettingsCompanyInfo() {
+        const companyInfo = JSON.parse(localStorage.getItem('companyInfo')) || {};
         document.getElementById('settingsCompanyName').value = companyInfo.name || '';
         document.getElementById('settingsManager').value = companyInfo.manager || '';
         document.getElementById('settingsPhone').value = companyInfo.phone || '';
         formatPhoneNumber(document.getElementById('settingsPhone'));
         document.getElementById('settingsAddress').value = companyInfo.address || '';
     }
-}
 
-function removeWorkItem(element) {
-    element.parentElement.remove();
-    updateTotalAmount();
-}
-
-function addWorkItem(itemData = null) {
-    const workItemsContainer = document.getElementById('workItems');
-    const newItem = document.createElement('div');
-    newItem.className = 'work-item';
-    
-    const name = itemData ? itemData.name : '';
-    const quantity = itemData ? itemData.quantity : '';
-    const unit = itemData ? itemData.unit : '';
-    const price = itemData ? itemData.price : '';
-
-    newItem.innerHTML = `
-        <input type="text" placeholder="공사 항목" class="work-name" value="${name}">
-        <input type="number" placeholder="수량" class="work-quantity" value="${quantity}">
-        <input type="text" placeholder="단위" class="work-unit" value="${unit}">
-        <input type="number" placeholder="단가" class="work-price" value="${price}">
-        <button onclick="removeWorkItem(this)">삭제</button>
-    `;
-    workItemsContainer.appendChild(newItem);
-
-    // 실시간 총 금액 계산을 위해 새 항목의 입력 필드에 이벤트 리스너 추가
-    newItem.querySelectorAll('.work-quantity, .work-price').forEach(input => {
-        input.addEventListener('input', updateTotalAmount);
-    });
-}
-
-// 폰트 관련 함수
-function handleFontUpload(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-    
-    if (!file.name.toLowerCase().endsWith('.ttf')) {
-        alert('TTF 폰트 파일만 지원합니다.');
-        return;
+    function removeWorkItem(element) {
+        element.parentElement.remove();
+        updateTotalAmount();
     }
-    
-    const reader = new FileReader();
-    reader.onload = function(e) {
-        const fontData = e.target.result.split(',')[1]; // base64 부분만 추출
+
+    function addWorkItem(itemData = null) {
+        const workItemsContainer = document.getElementById('workItems');
+        const newItem = document.createElement('div');
+        newItem.className = 'work-item';
         
-        try {
-            // localStorage에 폰트 데이터 저장
-            localStorage.setItem('customFont', fontData);
-            
-            // 상태 업데이트
-            updateFontStatus(true, `"${file.name}" 폰트가 성공적으로 업로드되었습니다.`);
-            
-            alert('폰트가 성공적으로 설정되었습니다. 이제 PDF 생성 시 한글이 정상적으로 표시됩니다.');
-        } catch (error) {
-            console.error('폰트 저장 중 오류:', error);
-            
-            // localStorage 용량 제한 문제 처리
-            if (error.name === 'QuotaExceededError') {
-                alert('폰트 파일이 너무 큽니다. 더 작은 폰트 파일을 사용하거나 브라우저 캐시를 정리한 후 다시 시도해주세요.');
-            } else {
-                alert('폰트 설정 중 오류가 발생했습니다.');
+        const name = itemData ? itemData.name : '';
+        const quantity = itemData ? itemData.quantity : '';
+        const unit = itemData ? itemData.unit : '';
+        const price = itemData ? itemData.price : '';
+
+        newItem.innerHTML = `
+            <input type="text" placeholder="공사 항목" class="work-name" value="${name}">
+            <input type="number" placeholder="수량" class="work-quantity" value="${quantity}">
+            <input type="text" placeholder="단위" class="work-unit" value="${unit}">
+            <input type="number" placeholder="단가" class="work-price" value="${price}">
+            <button onclick="removeWorkItem(this)">삭제</button>
+        `;
+        workItemsContainer.appendChild(newItem);
+
+        newItem.querySelectorAll('.work-quantity, .work-price').forEach(input => {
+            input.addEventListener('input', updateTotalAmount);
+        });
+    }
+
+    function handleFontUpload(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const fontData = e.target.result.split(',')[1];
+            try {
+                localStorage.setItem('customFont', fontData);
+                window.font = fontData; // 전역 변수에도 할당
+                updateFontStatus(true, `'${file.name}' 폰트가 저장되었습니다.`);
+            } catch (error) {
+                if (error.name === 'QuotaExceededError') {
+                    updateFontStatus(false, '저장 공간이 부족합니다. 폰트 파일이 너무 클 수 있습니다.');
+                } else {
+                    updateFontStatus(false, '폰트 저장 중 오류가 발생했습니다.');
+                }
             }
-            
-            updateFontStatus(false, '폰트 저장 중 오류가 발생했습니다.');
+        };
+        reader.onerror = () => {
+            updateFontStatus(false, '폰트 파일을 읽는 데 실패했습니다.');
+        };
+        reader.readAsDataURL(file);
+    }
+
+    function updateFontStatus(success, message) {
+        const fontStatus = document.getElementById('fontStatus');
+        fontStatus.textContent = message;
+        fontStatus.className = `font-status ${success ? 'success' : 'error'}`;
+    }
+
+    function showFontGuide() {
+        document.getElementById('fontGuideModal').style.display = 'flex';
+    }
+
+    function closeFontGuideModal() {
+        document.getElementById('fontGuideModal').style.display = 'none';
+    }
+    
+    function loadSavedFontData() {
+        const fontData = localStorage.getItem('customFont');
+        if (fontData) {
+            window.font = fontData;
+            updateFontStatus(true, '저장된 폰트가 성공적으로 로드되었습니다.');
+        } else {
+            updateFontStatus(false, '설정된 한글 폰트가 없습니다.');
         }
-    };
-    
-    reader.onerror = function() {
-        updateFontStatus(false, '폰트 파일을 읽는 중 오류가 발생했습니다.');
-    };
-    
-    reader.readAsDataURL(file);
-}
-
-function updateFontStatus(success, message) {
-    const statusElement = document.getElementById('fontStatus');
-    if (!statusElement) return;
-    
-    statusElement.innerHTML = success 
-        ? `<div class="success-message">✅ ${message}</div>`
-        : `<div class="error-message">❌ ${message}</div>`;
-}
-
-function showFontGuide() {
-    const modal = document.getElementById('fontGuideModal');
-    if (modal) {
-        modal.style.display = 'block';
-    }
-}
-
-function closeFontGuideModal() {
-    const modal = document.getElementById('fontGuideModal');
-    if (modal) {
-        modal.style.display = 'none';
-    }
-}
-
-// 페이지 로드 시 저장된 폰트 데이터 확인
-function loadSavedFontData() {
-    const savedFont = localStorage.getItem('customFont');
-    if (savedFont) {
-        updateFontStatus(true, '저장된 폰트가 로드되었습니다.');
-    } else {
-        updateFontStatus(false, '폰트가 설정되지 않았습니다. PDF에서 한글이 깨질 수 있습니다.');
-    }
-}
-
-// PDF 생성 함수
-async function generatePDF() {
-    if (!font) {
-        alert('PDF 생성을 위한 한글 폰트가 설정되지 않았습니다. 설정 페이지에서 폰트를 업로드해주세요.');
-        showFontGuide();
-        return;
     }
 
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF();
+    async function generatePDF() {
+        if (!font) {
+            alert('PDF 생성을 위한 한글 폰트가 설정되지 않았습니다. 설정 페이지에서 폰트를 업로드해주세요.');
+            showFontGuide();
+            return;
+        }
 
-    doc.addFileToVFS('malgun.ttf', font);
-    doc.addFont('malgun.ttf', 'malgun', 'normal');
-    doc.setFont('malgun');
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
 
-    try {
-        // --- 데이터 수집 ---
-        const companyName = document.getElementById('companyName').value;
-        const manager = document.getElementById('manager').value;
-        const phone = document.getElementById('phone').value;
-        const companyInfo = JSON.parse(localStorage.getItem('companyInfo')) || {};
-        const address = companyInfo.address || '';
+        doc.addFileToVFS('malgun.ttf', font);
+        doc.addFont('malgun.ttf', 'malgun', 'normal');
+        doc.setFont('malgun');
 
-        const siteName = document.getElementById('siteName').value;
-        const customerName = document.getElementById('customerName').value;
-        const customerPhone = document.getElementById('customerPhone').value;
-        const workAddress = document.getElementById('workAddress').value;
-        const estimateDate = document.getElementById('estimateDate').value;
-        const deadlineDate = document.getElementById('deadlineDate').value;
-        
-        const totalAmount = document.getElementById('totalAmount').textContent;
-        const notes = document.getElementById('notes').value;
+        try {
+            const companyName = document.getElementById('companyName').value;
+            const manager = document.getElementById('manager').value;
+            const phone = document.getElementById('phone').value;
+            const companyInfo = JSON.parse(localStorage.getItem('companyInfo')) || {};
+            const address = companyInfo.address || '';
+            const siteName = document.getElementById('siteName').value;
+            const customerName = document.getElementById('customerName').value;
+            const customerPhone = document.getElementById('customerPhone').value;
+            const workAddress = document.getElementById('workAddress').value;
+            const estimateDate = document.getElementById('estimateDate').value;
+            const deadlineDate = document.getElementById('deadlineDate').value;
+            const totalAmount = document.getElementById('totalAmount').textContent;
+            const notes = document.getElementById('notes').value;
+            const workItems = [];
+            document.querySelectorAll('#workItems .work-item').forEach(item => {
+                const name = item.querySelector('.work-name').value;
+                const quantity = item.querySelector('.work-quantity').value;
+                const unit = item.querySelector('.work-unit').value;
+                const price = item.querySelector('.work-price').value;
+                if (name) {
+                    workItems.push({ name, quantity, unit, price });
+                }
+            });
 
-        const workItems = [];
+            doc.setFontSize(22);
+            doc.text("견 적 서", 105, 20, { align: 'center' });
+            
+            doc.setFontSize(10);
+            doc.text(`견적일: ${estimateDate}`, 195, 30, { align: 'right' });
+
+            doc.autoTable({
+                startY: 35,
+                head: [['공급자 (회사 정보)']],
+                body: [
+                    [`회사명: ${companyName}`],
+                    [`담당자: ${manager}`],
+                    [`연락처: ${phone}`],
+                    [`주소: ${address}`]
+                ],
+                theme: 'grid',
+                styles: { font: 'malgun', fontStyle: 'normal' },
+                headStyles: { font: 'malgun' }
+            });
+            
+            doc.autoTable({
+                head: [['공급받는 자 (고객 정보)']],
+                body: [
+                    [`현장명: ${siteName}`],
+                    [`고객명: ${customerName}`],
+                    [`연락처: ${customerPhone}`],
+                    [`공사 주소: ${workAddress}`],
+                    [`제출 마감일: ${deadlineDate || '없음'}`]
+                ],
+                theme: 'grid',
+                styles: { font: 'malgun', fontStyle: 'normal' },
+                headStyles: { font: 'malgun' }
+            });
+            
+            const workItemsBody = workItems.map((item, index) => [
+                index + 1, item.name, item.quantity || '0', item.unit,
+                item.price ? Number(item.price).toLocaleString() : '0',
+                (item.quantity && item.price) ? (Number(item.quantity) * Number(item.price)).toLocaleString() : '0'
+            ]);
+            
+            doc.autoTable({
+                head: [['No.', '공사 항목', '수량', '단위', '단가', '금액']],
+                body: workItemsBody,
+                headStyles: { halign: 'center', font: 'malgun' },
+                columnStyles: {
+                    0: { halign: 'center' }, 2: { halign: 'right' }, 3: { halign: 'center' },
+                    4: { halign: 'right' }, 5: { halign: 'right' }
+                }
+            });
+            
+            const finalY = doc.autoTable.previous.finalY;
+            doc.setFontSize(12);
+            doc.text(`총 견적 금액: ${totalAmount}`, 195, finalY + 10, { align: 'right' });
+            
+            doc.setFontSize(10);
+            doc.text("특이사항", 14, finalY + 20);
+            doc.autoTable({
+                startY: finalY + 22,
+                body: [[notes || '없음']],
+                theme: 'plain',
+                styles: { font: 'malgun' }
+            });
+
+            const pdfBlob = doc.output('blob');
+            const fileName = `${siteName.replace(/[\/\\?%*:|"<>]/g, '-') || '견적서'}.pdf`;
+            
+            generatedPdfDoc = doc;
+            generatedPdfFile = new File([pdfBlob], fileName, { type: 'application/pdf' });
+            generatedPdfSiteName = siteName || '견적서';
+            
+            document.getElementById('pdfActionModal').style.display = 'flex';
+
+        } catch(e) {
+            console.error("PDF 생성 중 오류 발생:", e);
+            alert("PDF를 생성하는 중에 오류가 발생했습니다. 개발자 콘솔을 확인해주세요.");
+        }
+    }
+
+    function saveEstimate(showAlert = false) {
+        const customer = {
+            id: 'customer-' + Date.now(),
+            companyName: document.getElementById('companyName').value,
+            manager: document.getElementById('manager').value,
+            phone: document.getElementById('phone').value,
+            siteName: document.getElementById('siteName').value,
+            customerName: document.getElementById('customerName').value,
+            customerPhone: document.getElementById('customerPhone').value,
+            workAddress: document.getElementById('workAddress').value,
+            estimateDate: document.getElementById('estimateDate').value,
+            deadlineDate: document.getElementById('deadlineDate').value,
+            totalAmount: document.getElementById('totalAmount').textContent,
+            notes: document.getElementById('notes').value,
+            workItems: []
+        };
+
         document.querySelectorAll('#workItems .work-item').forEach(item => {
             const name = item.querySelector('.work-name').value;
             const quantity = item.querySelector('.work-quantity').value;
             const unit = item.querySelector('.work-unit').value;
             const price = item.querySelector('.work-price').value;
             if (name) {
-                workItems.push({ name, quantity, unit, price });
+                customer.workItems.push({ name, quantity, unit, price });
             }
         });
 
-        // --- PDF 내용 생성 ---
-        doc.setFontSize(22);
-        doc.text("견 적 서", 105, 20, { align: 'center' });
-        
-        doc.setFontSize(10);
-        doc.text(`견적일: ${estimateDate}`, 195, 30, { align: 'right' });
-
-        doc.autoTable({
-            startY: 35,
-            head: [['공급자 (회사 정보)']],
-            body: [
-                [`회사명: ${companyName}`],
-                [`담당자: ${manager}`],
-                [`연락처: ${phone}`],
-                [`주소: ${address}`]
-            ],
-            theme: 'grid',
-            styles: { font: 'malgun', fontStyle: 'normal' },
-            headStyles: { font: 'malgun' }
-        });
-        
-        doc.autoTable({
-            head: [['공급받는 자 (고객 정보)']],
-            body: [
-                [`현장명: ${siteName}`],
-                [`고객명: ${customerName}`],
-                [`연락처: ${customerPhone}`],
-                [`공사 주소: ${workAddress}`],
-                [`제출 마감일: ${deadlineDate || '없음'}`]
-            ],
-            theme: 'grid',
-            styles: { font: 'malgun', fontStyle: 'normal' },
-            headStyles: { font: 'malgun' }
-        });
-        
-        const workItemsBody = workItems.map((item, index) => [
-            index + 1, item.name, item.quantity || '0', item.unit,
-            item.price ? Number(item.price).toLocaleString() : '0',
-            (item.quantity && item.price) ? (Number(item.quantity) * Number(item.price)).toLocaleString() : '0'
-        ]);
-        
-        doc.autoTable({
-            head: [['No.', '공사 항목', '수량', '단위', '단가', '금액']],
-            body: workItemsBody,
-            headStyles: { halign: 'center', font: 'malgun' },
-            columnStyles: {
-                0: { halign: 'center' }, 2: { halign: 'right' }, 3: { halign: 'center' },
-                4: { halign: 'right' }, 5: { halign: 'right' }
+        if (!customer.siteName && !customer.customerName) {
+            if (showAlert) {
+                alert('현장명 또는 고객명을 입력해야 저장이 가능합니다.');
             }
-        });
-        
-        const finalY = doc.autoTable.previous.finalY;
-        doc.setFontSize(12);
-        doc.text(`총 견적 금액: ${totalAmount}`, 195, finalY + 10, { align: 'right' });
-        
-        doc.setFontSize(10);
-        doc.text("특이사항", 14, finalY + 20);
-        doc.autoTable({
-            startY: finalY + 22,
-            body: [[notes || '없음']],
-            theme: 'plain',
-            styles: { font: 'malgun' }
-        });
-
-        const pdfBlob = doc.output('blob');
-        const fileName = `${siteName.replace(/[\/\\?%*:|"<>]/g, '-') || '견적서'}.pdf`;
-        
-        generatedPdfDoc = doc;
-        generatedPdfFile = new File([pdfBlob], fileName, { type: 'application/pdf' });
-        generatedPdfSiteName = siteName || '견적서';
-        
-        document.getElementById('pdfActionModal').style.display = 'flex';
-
-    } catch(e) {
-        console.error("PDF 생성 중 오류 발생:", e);
-        alert("PDF를 생성하는 중에 오류가 발생했습니다. 개발자 콘솔을 확인해주세요.");
-    }
-}
-
-function saveEstimate(showAlert = false) {
-    const customer = {
-        id: 'customer-' + Date.now(),
-        companyName: document.getElementById('companyName').value,
-        manager: document.getElementById('manager').value,
-        phone: document.getElementById('phone').value,
-        siteName: document.getElementById('siteName').value,
-        customerName: document.getElementById('customerName').value,
-        customerPhone: document.getElementById('customerPhone').value,
-        workAddress: document.getElementById('workAddress').value,
-        estimateDate: document.getElementById('estimateDate').value,
-        deadlineDate: document.getElementById('deadlineDate').value,
-        totalAmount: document.getElementById('totalAmount').textContent,
-        notes: document.getElementById('notes').value,
-        workItems: []
-    };
-
-    document.querySelectorAll('#workItems .work-item').forEach(item => {
-        const name = item.querySelector('.work-name').value;
-        const quantity = item.querySelector('.work-quantity').value;
-        const unit = item.querySelector('.work-unit').value;
-        const price = item.querySelector('.work-price').value;
-        if (name) {
-            customer.workItems.push({ name, quantity, unit, price });
+            return;
         }
-    });
+        
+        let customers = JSON.parse(localStorage.getItem('customers')) || [];
+        
+        const editingId = document.getElementById('editingEstimateId').value;
+        const existingIndex = editingId ? customers.findIndex(c => c.id === editingId) : -1;
 
-    if (!customer.siteName && !customer.customerName) {
+        if (existingIndex > -1) {
+            customer.id = customers[existingIndex].id;
+            customers[existingIndex] = customer;
+        } else {
+            customers.unshift(customer);
+        }
+        
+        localStorage.setItem('customers', JSON.stringify(customers));
+        document.getElementById('editingEstimateId').value = '';
+
         if (showAlert) {
-            alert('현장명 또는 고객명을 입력해야 저장이 가능합니다.');
+            alert('견적이 저장되었습니다!');
         }
-        return;
+        
+        const sentNotifications = new Set(JSON.parse(localStorage.getItem('sentNotifications')) || []);
+        sentNotifications.delete(customer.id);
+        localStorage.setItem('sentNotifications', JSON.stringify([...sentNotifications]));
     }
-    
-    let customers = JSON.parse(localStorage.getItem('customers')) || [];
-    
-    // 현장명으로 기존 견적 찾기
-    const existingIndex = customers.findIndex(c => c.siteName.trim() && c.siteName === customer.siteName.trim());
 
-    if (existingIndex > -1) {
-        // 기존 ID 유지하면서 업데이트
-        customer.id = customers[existingIndex].id;
-        customers[existingIndex] = customer;
-    } else {
-        customers.unshift(customer);
-    }
-    
-    localStorage.setItem('customers', JSON.stringify(customers));
-    
-    if (showAlert) {
-        alert('견적이 저장되었습니다!');
-    }
-    
-    // 마감일 알림 목록에서 제거하여 다시 알림 받을 수 있도록 함
-    const sentNotifications = new Set(JSON.parse(localStorage.getItem('sentNotifications')) || []);
-    sentNotifications.delete(customer.id);
-    localStorage.setItem('sentNotifications', JSON.stringify([...sentNotifications]));
-}
-
-function loadCustomers() {
-    try {
+    function loadCustomers() {
         const customers = JSON.parse(localStorage.getItem('customers')) || [];
         renderCustomerList(customers);
-    } catch(e) {
-        console.error('고객 목록 로딩 중 오류:', e);
-        document.getElementById('customerList').innerHTML = `<div class="empty-state"><h3>고객 목록을 불러오는 중 오류가 발생했습니다.</h3></div>`;
-    }
-}
-
-function searchCustomers() {
-    const searchTerm = document.getElementById('searchInput').value.toLowerCase();
-    const allCustomers = JSON.parse(localStorage.getItem('customers')) || [];
-
-    if (searchTerm.trim() === '') {
-        renderCustomerList(allCustomers);
-        return;
     }
 
-    const filteredCustomers = allCustomers.filter(customer => {
-        const siteName = customer.siteName ? customer.siteName.toLowerCase() : '';
-        const customerName = customer.customerName ? customer.customerName.toLowerCase() : '';
-        const workAddress = customer.workAddress ? customer.workAddress.toLowerCase() : '';
-        
-        return siteName.includes(searchTerm) ||
-               customerName.includes(searchTerm) ||
-               workAddress.includes(searchTerm);
-    });
-    
-    renderCustomerList(filteredCustomers, true);
-}
-
-function renderCustomerList(customers, isSearchResult = false) {
-    const customerList = document.getElementById('customerList');
-    
-    if (customers.length === 0) {
-        if (isSearchResult) {
-             customerList.innerHTML = `<div class="empty-state">
-                <div style="font-size: 48px; margin-bottom: 15px;">🔍</div>
-                <h3>검색 결과가 없습니다</h3>
-                <p>다른 검색어로 시도해보세요.</p>
-            </div>`;
-        } else {
-            customerList.innerHTML = `<div class="empty-state">
-                <div style="font-size: 48px; margin-bottom: 15px;">📋</div>
-                <h3>저장된 고객이 없습니다</h3>
-                <p>견적서를 작성하면 고객 정보가 자동으로 저장됩니다</p>
-            </div>`;
+    function searchCustomers() {
+        const query = document.getElementById('searchInput').value.toLowerCase();
+        const allCustomers = JSON.parse(localStorage.getItem('customers')) || [];
+        if (!query) {
+            renderCustomerList(allCustomers);
+            return;
         }
-        return;
+        const filteredCustomers = allCustomers.filter(c => 
+            (c.siteName && c.siteName.toLowerCase().includes(query)) ||
+            (c.customerName && c.customerName.toLowerCase().includes(query)) ||
+            (c.workAddress && c.workAddress.toLowerCase().includes(query))
+        );
+        renderCustomerList(filteredCustomers, true);
     }
 
-    customers.sort((a, b) => {
-        if (!a.deadlineDate) return 1;
-        if (!b.deadlineDate) return -1;
-        return new Date(a.deadlineDate) - new Date(b.deadlineDate);
-    });
+    function renderCustomerList(customers, isSearchResult = false) {
+        const listElement = document.getElementById('customerList');
+        if (customers.length === 0) {
+            const emptyMessage = isSearchResult 
+                ? '<h3>검색 결과가 없습니다</h3><p>다른 검색어로 시도해보세요.</p>'
+                : '<div style="font-size: 48px; margin-bottom: 15px;">📋</div><h3>저장된 고객이 없습니다</h3><p>견적서를 작성하면 고객 정보가 자동으로 저장됩니다</p>';
+            listElement.innerHTML = `<div class="empty-state">${emptyMessage}</div>`;
+            return;
+        }
 
-    customerList.innerHTML = ''; 
+        listElement.innerHTML = customers.map(customer => `
+            <div class="customer-card">
+                <div class="card-header">
+                    <strong>${customer.siteName || '이름 없는 현장'}</strong>
+                    <div class="card-actions">
+                        <button class="btn-icon" onclick="viewEstimateDetails(event, '${customer.id}')">✏️</button>
+                        <button class="btn-icon" onclick="deleteCustomer(event, '${customer.id}')">🗑️</button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <p><strong>고객명:</strong> ${customer.customerName || '-'}</p>
+                    <p><strong>연락처:</strong> ${customer.customerPhone || '-'}</p>
+                    <p><strong>주소:</strong> ${customer.workAddress || '-'}</p>
+                    <p><strong>견적일:</strong> ${customer.estimateDate}</p>
+                    <p><strong>견적액:</strong> ${customer.totalAmount}</p>
+                </div>
+            </div>
+        `).join('');
+    }
 
-    customers.forEach(customer => {
-        const item = document.createElement('div');
-        item.className = 'customer-item';
+    function deleteCustomer(event, customerId) {
+        event.stopPropagation();
+        if (confirm('이 고객 정보를 정말로 삭제하시겠습니까?')) {
+            let customers = JSON.parse(localStorage.getItem('customers')) || [];
+            customers = customers.filter(c => c.id !== customerId);
+            localStorage.setItem('customers', JSON.stringify(customers));
+            loadCustomers();
+        }
+    }
 
-        let deadlineHTML = '';
-        if (customer.deadlineDate) {
-            const deadline = new Date(customer.deadlineDate);
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
+    function viewEstimateDetails(event, customerId) {
+        event.stopPropagation();
+        const customers = JSON.parse(localStorage.getItem('customers')) || [];
+        const customer = customers.find(c => c.id === customerId);
+        if (customer) {
+            document.getElementById('companyName').value = customer.companyName;
+            document.getElementById('manager').value = customer.manager;
+            document.getElementById('phone').value = customer.phone;
+            formatPhoneNumber(document.getElementById('phone'));
+            document.getElementById('siteName').value = customer.siteName;
+            document.getElementById('customerName').value = customer.customerName;
+            document.getElementById('customerPhone').value = customer.customerPhone;
+            formatPhoneNumber(document.getElementById('customerPhone'));
+            document.getElementById('workAddress').value = customer.workAddress;
+            document.getElementById('estimateDate').value = customer.estimateDate;
+            document.getElementById('deadlineDate').value = customer.deadlineDate || '';
+            document.getElementById('notes').value = customer.notes;
             
-            const diffTime = deadline.getTime() - today.getTime();
-            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-            
-            let deadlineClass = 'normal';
-            let deadlineText = `마감: ${diffDays}일 남음`;
-
-            if (diffDays < 0) {
-                deadlineClass = 'overdue';
-                deadlineText = `마감일 지남`;
-            } else if (diffDays === 0) {
-                deadlineClass = 'today';
-                deadlineText = 'D-DAY';
-            } else if (diffDays <= 3) {
-                deadlineClass = 'urgent';
-                deadlineText = `마감임박: ${diffDays}일!`;
+            const workItemsContainer = document.getElementById('workItems');
+            workItemsContainer.innerHTML = '';
+            if (customer.workItems && customer.workItems.length > 0) {
+                customer.workItems.forEach(item => addWorkItem(item));
+            } else {
+                addWorkItem(); // 비어있을 경우 기본 항목 추가
             }
             
-            deadlineHTML = `<div class="customer-deadline ${deadlineClass}">${deadlineText}</div>`;
+            updateTotalAmount();
+            document.getElementById('editingEstimateId').value = customer.id;
+            showPage('estimate');
+            window.scrollTo(0, 0);
         }
-        
-        const phoneLink = customer.customerPhone 
-            ? `<a href="tel:${customer.customerPhone.replace(/\D/g, '')}" onclick="event.stopPropagation()">${customer.customerPhone}</a>`
-            : '입력 없음';
-
-        item.innerHTML = `
-            <div class="customer-name">${customer.siteName}</div>
-            <div class="customer-info"><b>고객:</b> ${customer.customerName} (${phoneLink})</div>
-            <div class="customer-info"><b>주소:</b> ${customer.workAddress || '입력 없음'}</div>
-            <div class="customer-date">견적일: ${customer.estimateDate}</div>
-            ${deadlineHTML}
-            <div class="customer-item-buttons">
-                <button class="btn-edit" onclick="viewEstimateDetails(event, '${customer.id}')">수정</button>
-                <button class="btn-delete" onclick="deleteCustomer(event, '${customer.id}')">삭제</button>
-            </div>
-        `;
-        // Add event listeners for the new buttons
-        const editButton = item.querySelector('.btn-edit');
-        editButton.addEventListener('click', (event) => {
-            const customerId = editButton.onclick.toString().match(/'(.*?)'/)[1];
-            viewEstimateDetails(event, customerId);
-        });
-
-        const deleteButton = item.querySelector('.btn-delete');
-        deleteButton.addEventListener('click', (event) => {
-            const customerId = deleteButton.onclick.toString().match(/'(.*?)'/)[1];
-            deleteCustomer(event, customerId);
-        });
-
-        customerList.appendChild(item);
-    });
-}
-
-function deleteCustomer(event, customerId) {
-    if (event) event.stopPropagation();
-    if (!confirm('정말 이 고객 정보를 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.')) {
-        return;
     }
 
-    try {
-        const customerIdNum = parseInt(customerId, 10);
-        let customers = JSON.parse(localStorage.getItem('customers')) || [];
-        customers = customers.filter(c => c.id !== customerIdNum);
-        localStorage.setItem('customers', JSON.stringify(customers));
-        
-        // 알림 목록에서도 해당 고객사 정보 제거
-        let sentNotifications = new Set(JSON.parse(localStorage.getItem('sentNotifications')) || []);
-        if (sentNotifications.has(customerIdNum)) {
-            sentNotifications.delete(customerIdNum);
-            localStorage.setItem('sentNotifications', JSON.stringify([...sentNotifications]));
-        }
-
-        loadCustomers(); // 목록 새로고침
-    } catch (e) {
-        console.error('고객 정보 삭제 중 오류:', e);
-        alert('고객 정보를 삭제하는 중 오류가 발생했습니다.');
-    }
-}
-
-function viewEstimateDetails(event, customerId) {
-    if (event) event.stopPropagation();
-
-    const customers = JSON.parse(localStorage.getItem('customers')) || [];
-    const estimate = customers.find(c => c.id === parseInt(customerId, 10));
-
-    if (!estimate) {
-        alert('견적 정보를 찾을 수 없습니다.');
-        return;
-    }
-
-    showPage('estimate');
-
-    document.getElementById('editingEstimateId').value = estimate.id;
-    document.getElementById('siteName').value = estimate.siteName || '';
-    document.getElementById('customerName').value = estimate.customerName || '';
-    document.getElementById('customerPhone').value = estimate.customerPhone || '';
-    formatPhoneNumber(document.getElementById('customerPhone'));
-    document.getElementById('workAddress').value = estimate.workAddress || '';
-    document.getElementById('estimateDate').value = estimate.estimateDate || '';
-    document.getElementById('deadlineDate').value = estimate.deadlineDate || '';
-    document.getElementById('notes').value = estimate.notes || '';
-    document.getElementById('totalAmount').textContent = estimate.totalAmount || '0원';
-
-    const workItemsContainer = document.getElementById('workItems');
-    workItemsContainer.innerHTML = '';
-    if (estimate.workItems && estimate.workItems.length > 0) {
-        estimate.workItems.forEach(item => addWorkItem(item));
-    } else {
+    function clearEstimateForm() {
+        document.getElementById('estimatePage').querySelector('form').reset();
+        document.getElementById('workItems').innerHTML = '';
         addWorkItem();
+        document.getElementById('estimateDate').value = new Date().toISOString().split('T')[0];
+        document.getElementById('editingEstimateId').value = '';
+        loadCompanyInfo();
+        updateTotalAmount();
     }
-}
 
-function clearEstimateForm() {
-    document.getElementById('editingEstimateId').value = '';
-    document.getElementById('siteName').value = '';
-    document.getElementById('customerName').value = '';
-    document.getElementById('customerPhone').value = '';
-    document.getElementById('workAddress').value = '';
-    document.getElementById('deadlineDate').value = '';
-    document.getElementById('notes').value = '';
-    document.getElementById('totalAmount').textContent = '0원';
-    
-    const workItemsContainer = document.getElementById('workItems');
-    workItemsContainer.innerHTML = '';
-    addWorkItem();
-    updateTotalAmount(); // 폼 클리어 후 총액 업데이트
+    function formatPhoneNumber(input) {
+        if (!input) return;
+        let value = input.value.replace(/\D/g, '');
+        if (value.length > 11) value = value.substring(0, 11);
+        
+        if (value.length > 7) {
+            input.value = `${value.substring(0, 3)}-${value.substring(3, 7)}-${value.substring(7)}`;
+        } else if (value.length > 3) {
+            input.value = `${value.substring(0, 3)}-${value.substring(3)}`;
+        } else {
+            input.value = value;
+        }
+    }
 
-    document.getElementById('estimateDate').value = new Date().toISOString().split('T')[0];
-    loadCompanyInfo();
-}
+    function exportData() {
+        try {
+            const data = {
+                companyInfo: JSON.parse(localStorage.getItem('companyInfo')),
+                customers: JSON.parse(localStorage.getItem('customers')),
+                font: localStorage.getItem('customFont')
+            };
+            const dataStr = JSON.stringify(data, null, 2);
+            const blob = new Blob([dataStr], {type: "application/json"});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            const date = new Date().toISOString().slice(0,10).replace(/-/g,"");
+            a.download = `estimate_backup_${date}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            alert('데이터가 성공적으로 내보내졌습니다.');
+        } catch (error) {
+            console.error('데이터 내보내기 실패:', error);
+            alert('데이터 내보내기에 실패했습니다.');
+        }
+    }
 
-function formatPhoneNumber(input) {
-    let value = input.value.replace(/\D/g, '');
-    let formattedValue = value.replace(/(^02.{0}|^01.{1}|[0-9]{3,4})([0-9]{3,4})([0-9]{4})/, "$1-$2-$3");
-    input.value = formattedValue;
-}
+    function importData() {
+        document.getElementById('importFile').click();
+    }
 
-function exportData() {
-    try {
-        const companyInfo = localStorage.getItem('companyInfo');
-        const customers = localStorage.getItem('customers');
+    function handleFileImport(event) {
+        const file = event.target.files[0];
+        if (!file) return;
 
-        const dataToExport = {
-            companyInfo: companyInfo ? JSON.parse(companyInfo) : {},
-            customers: customers ? JSON.parse(customers) : []
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            try {
+                const data = JSON.parse(e.target.result);
+                if (confirm('데이터를 불러오면 현재 모든 데이터가 덮어씌워집니다. 계속하시겠습니까?')) {
+                    if(data.companyInfo) localStorage.setItem('companyInfo', JSON.stringify(data.companyInfo));
+                    if(data.customers) localStorage.setItem('customers', JSON.stringify(data.customers));
+                    if(data.font) {
+                        localStorage.setItem('customFont', data.font);
+                        window.font = data.font;
+                    }
+                    alert('데이터를 성공적으로 불러왔습니다. 페이지를 새로고침합니다.');
+                    location.reload();
+                }
+            } catch (error) {
+                alert('데이터 파일이 손상되었거나 잘못된 형식입니다.');
+            } finally {
+                event.target.value = '';
+            }
+        };
+        reader.readAsText(file);
+    }
+
+    function closePdfActionModal() {
+        document.getElementById('pdfActionModal').style.display = 'none';
+    }
+
+    async function downloadPDF() {
+        if (!generatedPdfDoc) {
+            alert('먼저 PDF를 생성해주세요.');
+            return;
+        }
+        generatedPdfDoc.save(generatedPdfFile.name);
+        closePdfActionModal();
+    }
+
+    async function sharePDF() {
+        if (!generatedPdfFile) {
+            alert('먼저 PDF를 생성해주세요.');
+            return;
+        }
+
+        const shareData = {
+            title: `[견적서] ${generatedPdfSiteName}`,
+            text: `${generatedPdfSiteName} 견적서입니다.`,
+            files: [generatedPdfFile]
         };
 
-        const dataStr = JSON.stringify(dataToExport, null, 2);
-        const blob = new Blob([dataStr], { type: 'application/json' });
-        
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.style.display = 'none';
-        a.href = url;
-        const date = new Date().toISOString().slice(0, 10);
-        a.download = `견적서_데이터_백업_${date}.json`;
-        document.body.appendChild(a);
-        a.click();
-        
-        URL.revokeObjectURL(url);
-        a.remove();
-        
-        alert('데이터 내보내기가 완료되었습니다.');
-
-    } catch (error) {
-        console.error('데이터 내보내기 중 오류 발생:', error);
-        alert('데이터를 내보내는 중 오류가 발생했습니다.');
-    }
-}
-
-function importData() {
-    document.getElementById('importFile').click();
-}
-
-function handleFileImport(event) {
-    const file = event.target.files[0];
-    if (!file) {
-        return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = function(e) {
-        try {
-            const importedData = JSON.parse(e.target.result);
-
-            if (importedData.companyInfo && typeof importedData.customers !== 'undefined') {
-                 if (!confirm("데이터를 불러오면 현재 모든 데이터가 교체됩니다. 계속하시겠습니까?")) {
-                    event.target.value = '';
-                    return;
+        if (navigator.canShare && navigator.canShare(shareData)) {
+            try {
+                await navigator.share(shareData);
+            } catch (error) {
+                if (error.name !== 'AbortError') {
+                    alert('공유하는 중 오류가 발생했습니다.');
                 }
-
-                localStorage.setItem('companyInfo', JSON.stringify(importedData.companyInfo || {}));
-                localStorage.setItem('customers', JSON.stringify(importedData.customers || []));
-                
-                alert('데이터를 성공적으로 불러왔습니다. 앱을 새로고침합니다.');
-                location.reload();
-            } else {
-                alert('잘못된 형식의 파일입니다. 백업 파일을 확인해주세요.');
             }
-        } catch (error) {
-            console.error('파일 불러오기 중 오류 발생:', error);
-            alert('파일을 읽는 중 오류가 발생했습니다.');
-        } finally {
-            event.target.value = '';
+        } else {
+            alert('이 브라우저에서는 파일 공유를 지원하지 않습니다. PDF를 먼저 다운로드한 후 직접 공유해주세요.');
         }
-    };
-    reader.readAsText(file);
-}
-
-function closePdfActionModal() {
-    const modal = document.getElementById('pdfActionModal');
-    if (modal) {
-        modal.style.display = 'none';
-    }
-}
-
-async function downloadPDF() {
-    if (generatedPdfDoc && generatedPdfSiteName) {
-        generatedPdfDoc.save(`견적서_${generatedPdfSiteName}.pdf`);
         closePdfActionModal();
-    } else {
-        alert('다운로드할 PDF 정보가 없습니다.');
-    }
-}
-
-async function sharePDF() {
-    if (!generatedPdfFile) {
-        alert('먼저 PDF를 생성해주세요.');
-        return;
     }
 
-    const shareData = {
-        title: `[견적서] ${generatedPdfSiteName}`,
-        text: `${generatedPdfSiteName} 견적서입니다.`,
-        files: [generatedPdfFile]
-    };
-
-    if (navigator.canShare && navigator.canShare(shareData)) {
-        try {
-            await navigator.share(shareData);
-            console.log('PDF 공유 성공');
-        } catch (error) {
-            console.error('PDF 공유 실패:', error);
-            // 사용자가 공유를 취소한 경우, 오류 메시지를 표시하지 않음
-            if (error.name !== 'AbortError') {
-                alert('공유하는 중 오류가 발생했습니다.');
-            }
+    function clearAllData() {
+        if (confirm('정말로 모든 회사 정보와 고객 데이터를 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.')) {
+            localStorage.clear();
+            alert('모든 데이터가 삭제되었습니다. 페이지를 새로고침합니다.');
+            location.reload();
         }
-    } else {
-        alert('이 브라우저에서는 파일 공유를 지원하지 않습니다. PDF를 먼저 다운로드한 후 직접 공유해주세요.');
     }
-    closePdfActionModal();
-}
 
-function clearAllData() {
-    if (confirm('정말로 모든 회사 정보와 고객 데이터를 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.')) {
-        localStorage.removeItem('companyInfo');
-        localStorage.removeItem('customers');
-        alert("모든 데이터가 삭제되었습니다.");
-        location.reload();
-    }
-}
-
-// === 전역 스코프에 함수 할당 ===
-// type="module"로 인해 함수들이 모듈 스코프에만 존재하게 되므로,
-// HTML의 onclick에서 호출할 수 있도록 전역 window 객체에 할당합니다.
-window.showPage = showPage;
-window.installApp = installApp;
-window.dismissInstall = dismissInstall;
-window.formatPhoneNumber = formatPhoneNumber;
-window.addWorkItem = addWorkItem;
-window.removeWorkItem = removeWorkItem;
-window.generatePDF = generatePDF;
-window.clearEstimateForm = clearEstimateForm;
-window.saveCompanyInfo = saveCompanyInfo;
-window.exportData = exportData;
-window.importData = importData;
-window.handleFileImport = handleFileImport;
-window.searchCustomers = searchCustomers;
-window.viewEstimateDetails = viewEstimateDetails;
-window.deleteCustomer = deleteCustomer;
-window.closePdfActionModal = closePdfActionModal;
-window.downloadPDF = downloadPDF;
-window.sharePDF = sharePDF;
-
-// 페이지 로드 시 이벤트 리스너 추가
-document.addEventListener('DOMContentLoaded', function() {
-    // 기존 초기화 코드...
-    
-    // 저장된 폰트 데이터 로드
-    loadSavedFontData();
-    
-    // 모달 닫기 이벤트
-    window.onclick = function(event) {
-        const modals = document.getElementsByClassName('modal');
-        for (let i = 0; i < modals.length; i++) {
-            if (event.target === modals[i]) {
-                modals[i].style.display = 'none';
-            }
-        }
-    };
-}); 
+    // 전역 스코프에 함수 노출
+    window.showPage = showPage;
+    window.installApp = installApp;
+    window.formatPhoneNumber = formatPhoneNumber;
+    window.removeWorkItem = removeWorkItem;
+    window.addWorkItem = addWorkItem;
+    window.clearEstimateForm = clearEstimateForm;
+    window.saveEstimate = saveEstimate;
+    window.generatePDF = generatePDF;
+    window.searchCustomers = searchCustomers;
+    window.deleteCustomer = deleteCustomer;
+    window.viewEstimateDetails = viewEstimateDetails;
+    window.saveCompanyInfo = saveCompanyInfo;
+    window.handleFontUpload = handleFontUpload;
+    window.showFontGuide = showFontGuide;
+    window.closeFontGuideModal = closeFontGuideModal;
+    window.exportData = exportData;
+    window.importData = importData;
+    window.handleFileImport = handleFileImport;
+    window.closePdfActionModal = closePdfActionModal;
+    window.downloadPDF = downloadPDF;
+    window.sharePDF = sharePDF;
+    window.clearAllData = clearAllData;
+} 
