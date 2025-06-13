@@ -404,7 +404,6 @@ async function generatePDF() {
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF();
         
-        // 폰트 추가 및 설정
         doc.addFileToVFS('NanumGothic.ttf', nanumGothicFont);
         doc.addFont('NanumGothic.ttf', 'NanumGothic', 'normal');
         doc.setFont('NanumGothic');
@@ -434,15 +433,25 @@ async function generatePDF() {
             }
         });
 
-        // --- PDF 내용 생성 (한글로 복원) ---
-        doc.setFontSize(22);
-        doc.text("견 적 서", 105, 20, { align: 'center' });
-        
-        doc.setFontSize(10);
-        doc.text(`견적일: ${estimateDate}`, 195, 30, { align: 'right' });
+        // --- PDF 디자인 개선 ---
+        const primaryColor = [22, 160, 133];
+        const lightGrayColor = [245, 245, 245];
 
+        // Header
+        doc.setFontSize(26);
+        doc.setFont(undefined, 'bold');
+        doc.setTextColor.apply(null, primaryColor);
+        doc.text("견 적 서", 105, 25, { align: 'center' });
+        doc.setFont(undefined, 'normal');
+        doc.setTextColor(0, 0, 0);
+
+        doc.setFontSize(10);
+        doc.text(`견적일: ${estimateDate}`, 195, 40, { align: 'right' });
+
+        // 공급자/공급받는자 정보
+        const infoTableStartY = 50;
         doc.autoTable({
-            startY: 35,
+            startY: infoTableStartY,
             head: [['공급자 (회사 정보)']],
             body: [
                 [`회사명: ${companyName}`],
@@ -451,11 +460,12 @@ async function generatePDF() {
                 [`주소: ${address}`]
             ],
             theme: 'grid',
-            styles: { font: 'NanumGothic', fontStyle: 'normal' },
-            headStyles: { font: 'NanumGothic', fontStyle: 'bold' }
+            styles: { font: 'NanumGothic', fontSize: 9 },
+            headStyles: { fillColor: primaryColor, textColor: 255, font: 'NanumGothic', fontStyle: 'bold' }
         });
         
         doc.autoTable({
+            startY: infoTableStartY,
             head: [['공급받는 자 (고객 정보)']],
             body: [
                 [`현장명: ${siteName}`],
@@ -465,34 +475,54 @@ async function generatePDF() {
                 [`제출 마감일: ${deadlineDate || '없음'}`]
             ],
             theme: 'grid',
-            styles: { font: 'NanumGothic', fontStyle: 'normal' },
-            headStyles: { font: 'NanumGothic', fontStyle: 'bold' }
+            styles: { font: 'NanumGothic', fontSize: 9 },
+            headStyles: { fillColor: primaryColor, textColor: 255, font: 'NanumGothic', fontStyle: 'bold' },
+            margin: { left: 108 }
         });
         
+        // 공사 내용
         const workItemsBody = workItems.map((item, index) => [
-            index + 1, item.name, item.quantity || '0', item.unit,
+            index + 1,
+            item.name,
+            item.quantity ? Number(item.quantity).toLocaleString() : '0',
+            item.unit,
             item.price ? Number(item.price).toLocaleString() : '0',
             (item.quantity && item.price) ? (Number(item.quantity) * Number(item.price)).toLocaleString() : '0'
         ]);
         
         doc.autoTable({
+            startY: doc.autoTable.previous.finalY + 10,
             head: [['No.', '공사 항목', '수량', '단위', '단가', '금액']],
             body: workItemsBody,
-            headStyles: { halign: 'center', font: 'NanumGothic', fontStyle: 'bold' },
-            styles: { font: 'NanumGothic', fontStyle: 'normal' }
+            theme: 'striped',
+            headStyles: { halign: 'center', fillColor: primaryColor, textColor: 255, font: 'NanumGothic', fontStyle: 'bold', fontSize: 10 },
+            bodyStyles: { font: 'NanumGothic', fontSize: 9 },
+            footStyles: { font: 'NanumGothic', fontStyle: 'bold' },
+            alternateRowStyles: { fillColor: lightGrayColor }
         });
         
+        // 총 금액 강조
         const finalY = doc.autoTable.previous.finalY;
+        doc.setFillColor.apply(null, lightGrayColor);
+        doc.rect(14, finalY + 5, 182, 12, 'F');
         doc.setFontSize(12);
-        doc.text(`총 견적 금액: ${totalAmount}`, 195, finalY + 10, { align: 'right' });
-        
-        doc.setFontSize(10);
-        doc.text("특이사항", 14, finalY + 20);
-        doc.autoTable({
-            startY: finalY + 22,
-            body: [[notes || '없음']],
-            theme: 'plain',
-            styles: { font: 'NanumGothic' }
+        doc.setFont(undefined, 'bold');
+        doc.setTextColor(30, 30, 30);
+        doc.text('총 견적 금액', 20, finalY + 12.5);
+        doc.setTextColor.apply(null, primaryColor);
+        doc.text(totalAmount, 196, finalY + 12.5, { align: 'right' });
+        doc.setTextColor(0,0,0);
+        doc.setFont(undefined, 'normal');
+
+        // 특이사항
+        doc.setFontSize(11);
+        doc.setFont(undefined, 'bold');
+        doc.text("특이사항", 14, finalY + 28);
+        doc.setFont(undefined, 'normal');
+        doc.setFontSize(9);
+        doc.text(notes || '없음', 14, finalY + 34, {
+            maxWidth: 182,
+            lineHeightFactor: 1.5
         });
 
         const pdfBlob = doc.output('blob');
@@ -506,7 +536,6 @@ async function generatePDF() {
 
     } catch(e) {
         console.error("PDF 생성 중 오류 발생:", e);
-        // 오류가 발생했더라도 로딩 오버레이는 숨김
     } finally {
         loadingOverlay.style.display = 'none';
     }
