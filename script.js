@@ -7,9 +7,6 @@ let generatedPdfDoc = null;
 let generatedPdfFile = null;
 let generatedPdfSiteName = '';
 
-// 폰트 데이터 캐싱을 위한 변수
-let nanumGothicFont = null;
-
 // 파일 시스템 접근을 위한 변수
 let dbDirectoryHandle = null;
 const DB_FILE_NAME = 'database.json';
@@ -112,18 +109,17 @@ async function initializeFileSystem() {
     // IndexedDB에서 핸들 가져오기
     dbDirectoryHandle = await getDirectoryHandleFromDB();
     if (dbDirectoryHandle) {
-        // 권한 확인
-        if (await verifyPermission(dbDirectoryHandle)) {
-            updateFileSystemStatus(true);
+        // 권한 확인 (페이지 로드 시에는 요청하지 않음)
+        if (await verifyPermission(dbDirectoryHandle, { request: false })) {
+            updateFileSystemStatus(true, '연결됨');
             await loadDataFromFile(); // 파일에서 데이터 로드
         } else {
-            // 권한이 만료되었거나 거부됨
-            dbDirectoryHandle = null;
-            updateFileSystemStatus(false);
-            loadDataFromLocalStorage(); // 로컬 스토리지에서 로드
+            // 핸들은 있지만 권한이 없는 상태
+            updateFileSystemStatus(false, '권한이 필요합니다. 폴더를 다시 연결해 주세요.');
+            loadDataFromLocalStorage(); // 우선 로컬 스토리지에서 로드
         }
     } else {
-        updateFileSystemStatus(false);
+        updateFileSystemStatus(false, '연결되지 않음');
         loadDataFromLocalStorage(); // 로컬 스토리지에서 로드
     }
 }
@@ -141,10 +137,22 @@ async function connectFileSystem() {
             dbDirectoryHandle = handle;
             await setDirectoryHandleInDB(handle);
             updateFileSystemStatus(true, '성공적으로 연결되었습니다!');
-            
-            // 연결 성공 후, 현재 로컬스토리지 데이터를 파일에 백업
-            await saveDataToFile(); 
-            alert('폴더가 연결되었습니다. 이제 모든 데이터는 선택한 폴더에 안전하게 자동 저장됩니다.');
+
+            try {
+                // 연결 시 기존 데이터 파일이 있는지 확인
+                await dbDirectoryHandle.getFileHandle(DB_FILE_NAME);
+                // 파일이 존재하면 데이터를 불러옴
+                await loadDataFromFile();
+                alert('폴더에 다시 연결하고 기존 데이터를 불러왔습니다.');
+            } catch (error) {
+                if (error.name === 'NotFoundError') {
+                    // 파일이 없으면 현재 데이터를 파일에 백업
+                    await saveDataToFile();
+                    alert('폴더가 연결되었습니다. 이제 모든 데이터는 선택한 폴더에 안전하게 자동 저장됩니다.');
+                } else {
+                    throw error;
+                }
+            }
         }
     } catch (error) {
         if (error.name !== 'AbortError') {
@@ -173,6 +181,13 @@ function updateFileSystemStatus(isConnected, message = '') {
 async function saveDataToFile() {
     if (!dbDirectoryHandle) return;
 
+    // 데이터를 저장하기 전에 항상 권한을 확인하고 필요한 경우 요청합니다.
+    if (!(await verifyPermission(dbDirectoryHandle))) {
+        updateFileSystemStatus(false, '권한이 필요합니다. 폴더를 다시 연결해 주세요.');
+        alert('데이터를 저장하기 위한 폴더 접근 권한이 없습니다. 설정 페이지에서 폴더를 다시 연결해주세요.');
+        return;
+    }
+
     try {
         const fileHandle = await dbDirectoryHandle.getFileHandle(DB_FILE_NAME, { create: true });
         const writable = await fileHandle.createWritable();
@@ -196,6 +211,14 @@ async function saveDataToFile() {
 
 async function loadDataFromFile() {
     if (!dbDirectoryHandle) return;
+    
+    // 데이터를 불러오기 전에 항상 권한을 확인하고 필요한 경우 요청합니다.
+    if (!(await verifyPermission(dbDirectoryHandle))) {
+        updateFileSystemStatus(false, '권한이 필요합니다. 폴더를 다시 연결해 주세요.');
+        // 권한이 없으면 여기서 중단하고, 로컬 스토리지 데이터가 화면에 표시되도록 합니다.
+        loadDataFromLocalStorage();
+        return;
+    }
 
     try {
         const fileHandle = await dbDirectoryHandle.getFileHandle(DB_FILE_NAME);
@@ -265,14 +288,17 @@ function clearDirectoryHandleFromDB() {
     // 핸들 삭제 로직 (필요 시 구현)
 }
 
-async function verifyPermission(handle) {
-    const options = { mode: 'readwrite' };
-    if ((await handle.queryPermission(options)) === 'granted') {
+async function verifyPermission(handle, options = { request: true }) {
+    const permOpts = { mode: 'readwrite' };
+    // 현재 권한 상태 확인
+    if ((await handle.queryPermission(permOpts)) === 'granted') {
         return true;
     }
-    if ((await handle.requestPermission(options)) === 'granted') {
+    // 권한 요청이 허용된 경우에만 요청
+    if (options.request && (await handle.requestPermission(permOpts)) === 'granted') {
         return true;
     }
+    // 그 외의 경우 (denied 또는 prompt인데 요청하지 않은 경우)
     return false;
 }
 
@@ -347,64 +373,21 @@ function addWorkItem(itemData = null) {
     workItemsContainer.appendChild(newItem);
 }
 
-function showFontGuide() {
-    document.getElementById('fontGuideModal').style.display = 'flex';
-}
-
-function closeFontGuideModal() {
-    document.getElementById('fontGuideModal').style.display = 'none';
-}
-
-// Base64 인코딩을 위한 헬퍼 함수
-function arrayBufferToBase64(buffer) {
-    let binary = '';
-    const bytes = new Uint8Array(buffer);
-    const len = bytes.byteLength;
-    for (let i = 0; i < len; i++) {
-        binary += String.fromCharCode(bytes[i]);
-    }
-    return window.btoa(binary);
-}
-
-// 폰트 로드 함수
-async function loadFont() {
-    if (nanumGothicFont) {
-        return; // 이미 로드되었으면 함수 종료
-    }
-
-    const loadingOverlay = document.getElementById('loadingOverlay');
-    const originalText = loadingOverlay.querySelector('p').textContent;
-    loadingOverlay.querySelector('p').textContent = '최초 실행 시 폰트를 로딩합니다. 잠시만 기다려주세요...';
-    loadingOverlay.style.display = 'flex';
-
-    try {
-        const response = await fetch('./fonts/NanumGothic.ttf');
-        if (!response.ok) {
-            throw new Error('폰트 파일을 불러오는 데 실패했습니다.');
-        }
-        const fontBuffer = await response.arrayBuffer();
-        nanumGothicFont = arrayBufferToBase64(fontBuffer);
-    } catch (error) {
-        console.error(error);
-        alert(error.message);
-        throw error; // 에러를 다시 던져서 PDF 생성 중단
-    } finally {
-        loadingOverlay.style.display = 'none';
-        loadingOverlay.querySelector('p').textContent = originalText;
-    }
-}
-
 async function generatePDF() {
     const loadingOverlay = document.getElementById('loadingOverlay');
     try {
-        await loadFont(); // 폰트 로드 (필요한 경우)
+        if (typeof window.font === 'undefined') {
+            alert('PDF 생성에 필요한 폰트 파일(font.js)이 로드되지 않았습니다. 페이지를 새로고침하고 다시 시도해 주세요.');
+            console.error('font.js가 로드되지 않았습니다.');
+            return;
+        }
 
         loadingOverlay.style.display = 'flex';
 
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF();
         
-        doc.addFileToVFS('NanumGothic.ttf', nanumGothicFont);
+        doc.addFileToVFS('NanumGothic.ttf', window.font);
         doc.addFont('NanumGothic.ttf', 'NanumGothic', 'normal');
         doc.setFont('NanumGothic');
 
@@ -796,8 +779,6 @@ window.searchCustomers = searchCustomers;
 window.deleteCustomer = deleteCustomer;
 window.viewEstimateDetails = viewEstimateDetails;
 window.saveCompanyInfo = saveCompanyInfo;
-window.showFontGuide = showFontGuide;
-window.closeFontGuideModal = closeFontGuideModal;
 window.closePdfActionModal = closePdfActionModal;
 window.downloadPDF = downloadPDF;
 window.sharePDF = sharePDF;
