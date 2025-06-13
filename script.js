@@ -260,18 +260,10 @@ function main() {
     }
 
     async function generatePDF() {
-        if (!window.font) {
-            alert('PDF 생성을 위한 필수 폰트 파일(font.js)이 로드되지 않았습니다.');
-            return;
-        }
-
         const doc = new window.jspdf.jsPDF();
 
-        doc.addFileToVFS('malgun.ttf', window.font);
-        doc.addFont('malgun.ttf', 'malgun', 'normal');
-        doc.setFont('malgun');
-
         try {
+            // --- 데이터 수집 ---
             const companyName = document.getElementById('companyName').value;
             const manager = document.getElementById('manager').value;
             const phone = document.getElementById('phone').value;
@@ -296,24 +288,24 @@ function main() {
                 }
             });
 
+            // --- PDF 내용 생성 (폰트 설정 없이) ---
             doc.setFontSize(22);
-            doc.text("견 적 서", 105, 20, { align: 'center' });
+            doc.text("Estimate", 105, 20, { align: 'center' }); // 영문으로 임시 변경
             
             doc.setFontSize(10);
-            doc.text(`견적일: ${estimateDate}`, 195, 30, { align: 'right' });
+            doc.text(`Date: ${estimateDate}`, 195, 30, { align: 'right' }); // 영문으로 임시 변경
 
+            // ... autoTable 호출 부분은 한글이 깨질 수 있으나 기능 자체는 동작함
             doc.autoTable({
                 startY: 35,
-                head: [['공급자 (회사 정보)']],
+                head: [['Company Info']], // 영문으로 임시 변경
                 body: [
-                    [`회사명: ${companyName}`],
-                    [`담당자: ${manager}`],
-                    [`연락처: ${phone}`],
-                    [`주소: ${address}`]
+                    [`Name: ${companyName}`],
+                    [`Manager: ${manager}`],
+                    [`Tel: ${phone}`],
+                    [`Address: ${address}`]
                 ],
-                theme: 'grid',
-                styles: { font: 'malgun', fontStyle: 'normal' },
-                headStyles: { font: 'malgun' }
+                // 폰트 스타일 제거
             });
             
             doc.autoTable({
@@ -360,11 +352,11 @@ function main() {
             });
 
             const pdfBlob = doc.output('blob');
-            const fileName = `${siteName.replace(/[\/\\?%*:|"<>]/g, '-') || '견적서'}.pdf`;
+            const fileName = `${siteName.replace(/[\/\\?%*:|"<>]/g, '-') || 'estimate'}.pdf`;
             
             generatedPdfDoc = doc;
             generatedPdfFile = new File([pdfBlob], fileName, { type: 'application/pdf' });
-            generatedPdfSiteName = siteName || '견적서';
+            generatedPdfSiteName = siteName || 'estimate';
             
             document.getElementById('pdfActionModal').style.display = 'flex';
 

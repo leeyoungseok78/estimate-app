@@ -1,1 +1,0 @@
-window.font = "AAEAAAARAQAABAAQRFNJRwAAAAAAA... (매우 긴 Base64 폰트 데이터) ...AAAAA=="; 
