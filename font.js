@@ -1,0 +1,1 @@
+window.font = "AAEAAAARAQAABAAQRFNJRwAAAAAA... (이전보다 훨씬 더 긴, 완전한 Base64 폰트 데이터) ...AAAAA=="; 
