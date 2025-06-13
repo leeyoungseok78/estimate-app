@@ -20,8 +20,7 @@ const DB_NAME = 'estimateAppDB';
 const DB_VERSION = 1;
 const STORES = {
     COMPANY: 'companyInfo',
-    CUSTOMERS: 'customers',
-    SETTINGS: 'settings'
+    CUSTOMERS: 'customers'
 };
 
 // 페이지 전환 함수
@@ -89,19 +88,10 @@ function installApp() {
 
 // 초기화
 document.getElementById('estimateDate').value = new Date().toISOString().split('T')[0];
-loadCompanyInfo();
 
 // 페이지 로드 시 기존 항목에 대한 금액 계산 이벤트 리스너 추가
 document.querySelectorAll('#workItems .work-quantity, #workItems .work-price').forEach(input => {
     input.addEventListener('input', updateTotalAmount);
-    
-    // 기존 input 태그 타입을 number에서 text로 변경하고 포맷팅 이벤트 추가
-    if (input.type === 'number') {
-        input.type = 'text';
-        input.addEventListener('input', function() {
-            formatNumber(this);
-        });
-    }
 });
 
 document.querySelectorAll('.nav-btn').forEach(btn => {
@@ -172,375 +162,113 @@ function checkDeadlines() {
 function updateTotalAmount() {
     let total = 0;
     document.querySelectorAll('#workItems .work-item').forEach(item => {
-        // 쉼표 제거 후 숫자로 변환
-        const quantityValue = item.querySelector('.work-quantity').value.replace(/,/g, '');
-        const priceValue = item.querySelector('.work-price').value.replace(/,/g, '');
-        
-        const quantity = parseFloat(quantityValue) || 0;
-        const price = parseFloat(priceValue) || 0;
+        const quantityValue = item.querySelector('.work-quantity').value.replace(/,/g, '') || '0';
+        const priceValue = item.querySelector('.work-price').value.replace(/,/g, '') || '0';
+        const quantity = parseFloat(quantityValue);
+        const price = parseFloat(priceValue);
         total += quantity * price;
     });
-
-    document.getElementById('totalAmount').textContent = `${total.toLocaleString()}원`;
+    document.getElementById('totalAmount').textContent = `${total.toLocaleString('ko-KR')}원`;
 }
 
-// IndexedDB 초기화
 function initDB() {
     return new Promise((resolve, reject) => {
         const request = indexedDB.open(DB_NAME, DB_VERSION);
-        
         request.onerror = (event) => {
-            console.error('IndexedDB 오류:', event.target.error);
-            // 에러 발생 시 localStorage로 폴백
-            alert('데이터베이스 연결에 실패했습니다. 로컬 스토리지를 사용합니다.');
-            resolve(false);
+            console.error('IndexedDB error:', event.target.error);
+            reject('IndexedDB error');
         };
-        
         request.onsuccess = (event) => {
             db = event.target.result;
-            console.log('IndexedDB 연결 성공');
-            
-            // 파일 시스템 접근 가능 여부 확인
-            if ('showDirectoryPicker' in window) {
-                // 이전에 저장된 파일 핸들이 있는지 확인
-                loadFileHandle();
-            }
-            
-            resolve(true);
+            console.log('IndexedDB connection successful');
+            resolve();
         };
-        
         request.onupgradeneeded = (event) => {
             const db = event.target.result;
-            
-            // 회사 정보 저장소
             if (!db.objectStoreNames.contains(STORES.COMPANY)) {
-                db.createObjectStore(STORES.COMPANY, { keyPath: 'id', autoIncrement: true });
+                db.createObjectStore(STORES.COMPANY, { keyPath: 'id' });
             }
-            
-            // 고객 정보 저장소
             if (!db.objectStoreNames.contains(STORES.CUSTOMERS)) {
                 db.createObjectStore(STORES.CUSTOMERS, { keyPath: 'id' });
             }
-            
-            // 설정 저장소
-            if (!db.objectStoreNames.contains(STORES.SETTINGS)) {
-                db.createObjectStore(STORES.SETTINGS, { keyPath: 'key' });
-            }
         };
     });
 }
 
-// 파일 시스템 접근 권한 요청
-async function requestFileSystemAccess() {
-    try {
-        // 파일 시스템 접근 권한 요청
-        fileHandle = await window.showDirectoryPicker({
-            id: 'estimateAppData',
-            mode: 'readwrite',
-            startIn: 'documents'
-        });
-        
-        // 권한 확인
-        const permission = await fileHandle.requestPermission({ mode: 'readwrite' });
-        if (permission !== 'granted') {
-            alert('파일 시스템 접근 권한이 필요합니다.');
-            return false;
-        }
-        
-        // 파일 핸들 저장
-        saveFileHandle();
-        
-        // 파일 시스템 동기화 활성화
-        syncEnabled = true;
-        
-        // 현재 데이터 동기화
-        await syncDataToFile();
-        
-        return true;
-    } catch (error) {
-        console.error('파일 시스템 접근 오류:', error);
-        alert('파일 시스템 접근에 실패했습니다.');
-        return false;
-    }
-}
-
-// 파일 핸들 저장
-function saveFileHandle() {
-    if (!fileHandle) return;
-    
-    // FileSystemHandle은 직렬화할 수 없으므로 IndexedDB에 저장
-    if (navigator.storage && navigator.storage.persist) {
-        navigator.storage.persist().then(isPersisted => {
-            console.log(`영구 저장소 권한: ${isPersisted ? '획득' : '거부'}`);
-        });
-    }
-}
-
-// 파일 핸들 로드
-async function loadFileHandle() {
-    try {
-        // 이전에 저장된 파일 핸들이 있는지 확인
-        if (localStorage.getItem('fileSystemEnabled') === 'true') {
-            // 사용자에게 파일 시스템 접근 권한 요청
-            const confirmed = confirm('로컬 파일 시스템과 데이터를 동기화하시겠습니까?');
-            if (confirmed) {
-                await requestFileSystemAccess();
-            }
-        }
-    } catch (error) {
-        console.error('파일 핸들 로드 오류:', error);
-    }
-}
-
-// 데이터를 파일로 동기화
-async function syncDataToFile() {
-    if (!syncEnabled || !fileHandle) return;
-    
-    try {
-        // 모든 데이터 로드
-        const companyInfo = await loadData(STORES.COMPANY, 'companyInfo');
-        const customers = await loadData(STORES.CUSTOMERS);
-        const customFont = localStorage.getItem('customFont');
-        
-        // 데이터 객체 생성
-        const data = {
-            companyInfo,
-            customers,
-            font: customFont,
-            lastSync: new Date().toISOString()
-        };
-        
-        // JSON 문자열로 변환
-        const jsonData = JSON.stringify(data, null, 2);
-        
-        // 파일 생성 또는 업데이트
-        const dataFile = await getFileFromDirectory(fileHandle, 'estimate_data.json');
-        const writable = await dataFile.createWritable();
-        await writable.write(jsonData);
-        await writable.close();
-        
-        console.log('데이터가 파일로 동기화되었습니다.');
-        return true;
-    } catch (error) {
-        console.error('파일 동기화 오류:', error);
-        return false;
-    }
-}
-
-// 파일에서 데이터 동기화
-async function syncDataFromFile() {
-    if (!syncEnabled || !fileHandle) return;
-    
-    try {
-        // 파일 읽기
-        const dataFile = await getFileFromDirectory(fileHandle, 'estimate_data.json');
-        const fileData = await dataFile.getFile();
-        const jsonData = await fileData.text();
-        
-        // JSON 파싱
-        const data = JSON.parse(jsonData);
-        
-        // 데이터 저장
-        if (data.companyInfo) await saveData(STORES.COMPANY, data.companyInfo, 'companyInfo');
-        if (data.customers) await saveData(STORES.CUSTOMERS, data.customers);
-        if (data.font) localStorage.setItem('customFont', data.font);
-        
-        console.log('파일에서 데이터가 동기화되었습니다.');
-        return true;
-    } catch (error) {
-        if (error.name === 'NotFoundError') {
-            // 파일이 없는 경우 초기 동기화 수행
-            await syncDataToFile();
-        } else {
-            console.error('파일에서 데이터 동기화 오류:', error);
-        }
-        return false;
-    }
-}
-
-// 디렉토리에서 파일 가져오기 (없으면 생성)
-async function getFileFromDirectory(dirHandle, fileName) {
-    try {
-        // 파일이 이미 존재하는지 확인
-        const fileHandle = await dirHandle.getFileHandle(fileName, { create: true });
-        return fileHandle;
-    } catch (error) {
-        console.error('파일 접근 오류:', error);
-        throw error;
-    }
-}
-
-// 기존 함수 수정
-async function saveData(storeName, data, key = null) {
+function saveData(storeName, data) {
     return new Promise((resolve, reject) => {
-        if (db) {
-            // IndexedDB 사용
-            try {
-                const transaction = db.transaction(storeName, 'readwrite');
-                const store = transaction.objectStore(storeName);
-                
-                let request;
-                if (key) {
-                    // key가 문자열인 경우 (companyInfo 같은 경우)
-                    request = store.put({
-                        id: key,
-                        data: data
-                    });
-                } else {
-                    request = store.put(data);
-                }
-                
-                request.onsuccess = async () => {
-                    // 데이터 저장 후 파일 동기화
-                    if (syncEnabled) {
-                        await syncDataToFile();
-                    }
-                    resolve(true);
-                };
-                
-                request.onerror = (e) => {
-                    console.error('IndexedDB 저장 오류:', e.target.error);
-                    // 에러 발생 시 localStorage로 폴백
-                    localStorage.setItem(storeName, JSON.stringify(data));
-                    resolve(false);
-                };
-            } catch (e) {
-                console.error('IndexedDB 트랜잭션 오류:', e);
-                // 에러 발생 시 localStorage로 폴백
-                localStorage.setItem(storeName, JSON.stringify(data));
-                resolve(false);
-            }
-        } else {
-            // localStorage 폴백
-            localStorage.setItem(storeName, JSON.stringify(data));
-            resolve(true);
-        }
+        if (!db) return reject("DB not initialized");
+        const transaction = db.transaction(storeName, 'readwrite');
+        const store = transaction.objectStore(storeName);
+        const request = store.put(data);
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
     });
 }
 
-// 데이터 불러오기 함수 (IndexedDB 또는 localStorage)
-function loadData(storeName, key = null) {
+function loadData(storeName, key) {
     return new Promise((resolve, reject) => {
-        if (db) {
-            // IndexedDB 사용
-            try {
-                const transaction = db.transaction(storeName, 'readonly');
-                const store = transaction.objectStore(storeName);
-                
-                let request;
-                if (key) {
-                    request = store.get(key);
-                } else {
-                    // 모든 데이터 가져오기
-                    request = store.getAll();
-                }
-                
-                request.onsuccess = (event) => {
-                    if (key) {
-                        const result = event.target.result;
-                        if (result) {
-                            resolve(result.data || result.value || null);
-                        } else {
-                            resolve(null);
-                        }
-                    } else {
-                        resolve(event.target.result || []);
-                    }
-                };
-                
-                request.onerror = (e) => {
-                    console.error('IndexedDB 로드 오류:', e.target.error);
-                    // 에러 발생 시 localStorage로 폴백
-                    const data = localStorage.getItem(storeName);
-                    resolve(data ? JSON.parse(data) : (key ? null : []));
-                };
-            } catch (e) {
-                console.error('IndexedDB 트랜잭션 오류:', e);
-                // 에러 발생 시 localStorage로 폴백
-                const data = localStorage.getItem(storeName);
-                resolve(data ? JSON.parse(data) : (key ? null : []));
-            }
-        } else {
-            // localStorage 폴백
-            const data = localStorage.getItem(storeName);
-            resolve(data ? JSON.parse(data) : (key ? null : []));
-        }
+        if (!db) return reject("DB not initialized");
+        const transaction = db.transaction(storeName, 'readonly');
+        const store = transaction.objectStore(storeName);
+        const request = key ? store.get(key) : store.getAll();
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
     });
 }
 
-// 기존 함수 수정
 async function saveCompanyInfo() {
-    const companyInfo = {
+    const companyData = {
+        id: 'main',
         name: document.getElementById('settingsCompanyName').value,
         manager: document.getElementById('settingsManager').value,
         phone: document.getElementById('settingsPhone').value,
         address: document.getElementById('settingsAddress').value
     };
-    
-    // 먼저 localStorage에도 저장 (백업)
-    localStorage.setItem('companyInfo', JSON.stringify(companyInfo));
-    
-    // 그 다음 IndexedDB에 저장
-    await saveData(STORES.COMPANY, companyInfo, 'companyInfo');
-    
-    // 저장 후 견적서 페이지의 회사 정보도 업데이트
-    document.getElementById('companyName').value = companyInfo.name || '';
-    document.getElementById('manager').value = companyInfo.manager || '';
-    document.getElementById('phone').value = companyInfo.phone || '';
-    formatPhoneNumber(document.getElementById('phone'));
-    
-    const messageDiv = document.getElementById('companySavedMessage');
-    messageDiv.style.display = 'block';
-    setTimeout(() => {
-        messageDiv.style.display = 'none';
-    }, 2000);
+    try {
+        await saveData(STORES.COMPANY, companyData);
+        await loadCompanyInfo();
+        const messageDiv = document.getElementById('companySavedMessage');
+        messageDiv.style.display = 'block';
+        setTimeout(() => {
+            messageDiv.style.display = 'none';
+        }, 2000);
+    } catch (error) {
+        console.error('Failed to save company info:', error);
+    }
 }
 
 async function loadCompanyInfo() {
-    // 먼저 IndexedDB에서 시도
-    let companyInfo = await loadData(STORES.COMPANY, 'companyInfo');
-    
-    // IndexedDB에서 실패하면 localStorage에서 로드
-    if (!companyInfo) {
-        const localData = localStorage.getItem('companyInfo');
-        if (localData) {
-            companyInfo = JSON.parse(localData);
-            // localStorage에서 로드한 데이터를 IndexedDB에도 저장
-            await saveData(STORES.COMPANY, companyInfo, 'companyInfo');
-        } else {
-            companyInfo = {};
+    try {
+        const companyInfo = await loadData(STORES.COMPANY, 'main');
+        if (companyInfo) {
+            document.getElementById('companyName').value = companyInfo.name || '';
+            document.getElementById('manager').value = companyInfo.manager || '';
+            document.getElementById('phone').value = companyInfo.phone || '';
+            formatPhoneNumber(document.getElementById('phone'));
         }
+    } catch (error) {
+        console.error('Failed to load company info:', error);
     }
-    
-    document.getElementById('companyName').value = companyInfo.name || '';
-    document.getElementById('manager').value = companyInfo.manager || '';
-    document.getElementById('phone').value = companyInfo.phone || '';
-    formatPhoneNumber(document.getElementById('phone'));
 }
 
 async function loadSettingsCompanyInfo() {
-    // 먼저 IndexedDB에서 시도
-    let companyInfo = await loadData(STORES.COMPANY, 'companyInfo');
-    
-    // IndexedDB에서 실패하면 localStorage에서 로드
-    if (!companyInfo) {
-        const localData = localStorage.getItem('companyInfo');
-        if (localData) {
-            companyInfo = JSON.parse(localData);
-        } else {
-            companyInfo = {};
+    try {
+        const companyInfo = await loadData(STORES.COMPANY, 'main');
+        if (companyInfo) {
+            document.getElementById('settingsCompanyName').value = companyInfo.name || '';
+            document.getElementById('settingsManager').value = companyInfo.manager || '';
+            document.getElementById('settingsPhone').value = companyInfo.phone || '';
+            formatPhoneNumber(document.getElementById('settingsPhone'));
+            document.getElementById('settingsAddress').value = companyInfo.address || '';
         }
+    } catch (error) {
+        console.error('Failed to load settings company info:', error);
     }
-    
-    document.getElementById('settingsCompanyName').value = companyInfo.name || '';
-    document.getElementById('settingsManager').value = companyInfo.manager || '';
-    document.getElementById('settingsPhone').value = companyInfo.phone || '';
-    formatPhoneNumber(document.getElementById('settingsPhone'));
-    document.getElementById('settingsAddress').value = companyInfo.address || '';
 }
 
 function removeWorkItem(element) {
-    element.parentElement.remove();
+    element.closest('.work-item').remove();
     updateTotalAmount();
 }
 
@@ -565,20 +293,25 @@ function addWorkItem(itemData = null) {
 
     newItem.querySelectorAll('.work-quantity, .work-price').forEach(input => {
         input.addEventListener('input', updateTotalAmount);
+        // 초기 로드 시 값이 있다면 포맷팅 적용
+        if (input.value) {
+            formatNumber(input);
+        }
     });
 }
 
-// 천단위 쉼표 포맷 함수 추가
 function formatNumber(input) {
-    // 입력값에서 쉼표 제거
     let value = input.value.replace(/,/g, '');
-    
-    // 숫자만 남기기
-    value = value.replace(/[^\d]/g, '');
-    
-    // 천단위 쉼표 추가
-    if (value) {
-        input.value = Number(value).toLocaleString();
+    if (isNaN(value)) {
+        value = '';
+    }
+    const num = Number(value);
+    if (num === 0) {
+        input.value = '0';
+    } else if (!isNaN(num)) {
+        input.value = num.toLocaleString('ko-KR');
+    } else {
+        input.value = '';
     }
 }
 
@@ -770,162 +503,162 @@ async function saveEstimate(showAlert = false) {
         const quantityValue = item.querySelector('.work-quantity').value.replace(/,/g, '');
         const unit = item.querySelector('.work-unit').value;
         const priceValue = item.querySelector('.work-price').value.replace(/,/g, '');
-        
         if (name) {
             customer.workItems.push({ name, quantity: quantityValue, unit, price: priceValue });
         }
     });
 
     if (!customer.siteName && !customer.customerName) {
-        if (showAlert) {
-            alert('현장명 또는 고객명을 입력해야 저장이 가능합니다.');
-        }
+        if (showAlert) alert('현장명 또는 고객명을 입력해야 저장이 가능합니다.');
         return;
     }
-    
-    try {
-        // 고객 데이터 로드
-        let customers = await loadData(STORES.CUSTOMERS) || [];
-        
-        const editingId = document.getElementById('editingEstimateId').value;
-        const existingIndex = editingId ? customers.findIndex(c => c.id === editingId) : -1;
 
-        if (existingIndex > -1) {
-            customers[existingIndex] = customer;
-        } else {
-            customers.unshift(customer);
-        }
-        
-        // 고객 데이터 저장
-        await saveData(STORES.CUSTOMERS, customers);
-        
-        // 고객 목록 새로고침
-        loadCustomers();
-        
-        if (showAlert) {
-            alert('견적이 저장되었습니다.');
-        }
+    try {
+        await saveData(STORES.CUSTOMERS, customer);
+        if (showAlert) alert('견적이 저장되었습니다.');
+        await loadCustomers(); // Save and then reload the list.
     } catch (error) {
-        console.error('견적 저장 중 오류 발생:', error);
-        if (showAlert) {
-            alert('견적 저장 중 오류가 발생했습니다.');
-        }
+        console.error('Failed to save estimate:', error);
+        if (showAlert) alert('견적 저장에 실패했습니다.');
     }
 }
 
 async function loadCustomers() {
-    const customers = await loadData(STORES.CUSTOMERS) || [];
-    renderCustomerList(customers);
+    try {
+        const customers = await loadData(STORES.CUSTOMERS) || [];
+        renderCustomerList(customers);
+    } catch (error) {
+        console.error('Failed to load customers:', error);
+        renderCustomerList([]);
+    }
 }
 
 async function searchCustomers() {
     const query = document.getElementById('searchInput').value.toLowerCase();
-    const allCustomers = await loadData(STORES.CUSTOMERS) || [];
-    
-    if (!query) {
-        renderCustomerList(allCustomers);
-        return;
+    try {
+        const allCustomers = await loadData(STORES.CUSTOMERS) || [];
+        if (!query) {
+            renderCustomerList(allCustomers);
+            return;
+        }
+        const filteredCustomers = allCustomers.filter(c =>
+            (c.siteName && c.siteName.toLowerCase().includes(query)) ||
+            (c.customerName && c.customerName.toLowerCase().includes(query)) ||
+            (c.workAddress && c.workAddress.toLowerCase().includes(query))
+        );
+        renderCustomerList(filteredCustomers, true);
+    } catch (error) {
+        console.error('Failed to search customers:', error);
     }
-    
-    const filteredCustomers = allCustomers.filter(c => 
-        (c.siteName && c.siteName.toLowerCase().includes(query)) ||
-        (c.customerName && c.customerName.toLowerCase().includes(query)) ||
-        (c.workAddress && c.workAddress.toLowerCase().includes(query))
-    );
-    
-    renderCustomerList(filteredCustomers, true);
 }
 
 function renderCustomerList(customers, isSearchResult = false) {
-    const listElement = document.getElementById('customerList');
+    const listContainer = document.getElementById('customerList');
+    listContainer.innerHTML = '';
+
     if (customers.length === 0) {
-        const emptyMessage = isSearchResult 
-            ? '<h3>검색 결과가 없습니다</h3><p>다른 검색어로 시도해보세요.</p>'
-            : '<div style="font-size: 48px; margin-bottom: 15px;">📋</div><h3>저장된 고객이 없습니다</h3><p>견적서를 작성하면 고객 정보가 자동으로 저장됩니다</p>';
-        listElement.innerHTML = `<div class="empty-state">${emptyMessage}</div>`;
+        const emptyState = document.createElement('div');
+        emptyState.className = 'empty-state';
+        emptyState.innerHTML = `
+            <div style="font-size: 48px; margin-bottom: 15px;">📋</div>
+            <h3>${isSearchResult ? '검색 결과가 없습니다' : '저장된 고객이 없습니다'}</h3>
+            <p>${isSearchResult ? '다른 검색어로 시도해보세요' : '견적서를 작성하면 고객 정보가 자동으로 저장됩니다'}</p>
+        `;
+        listContainer.appendChild(emptyState);
         return;
     }
 
-    listElement.innerHTML = customers.map(customer => {
-        const phoneLink = customer.customerPhone 
-            ? `<a href="tel:${customer.customerPhone.replace(/\D/g, '')}" class="customer-phone-link" onclick="event.stopPropagation()">${customer.customerPhone}</a>`
-            : '-';
+    customers.forEach(customer => {
+        const card = document.createElement('div');
+        card.className = 'customer-item';
+        card.onclick = (event) => viewEstimateDetails(event, customer.id);
 
-        return `
-            <div class="customer-card">
-                <div class="card-header">
-                    <strong>${customer.siteName || '이름 없는 현장'}</strong>
-                    <div class="card-actions">
-                        <button class="btn-action-text" onclick="viewEstimateDetails(event, '${customer.id}')">수정</button>
-                        <button class="btn-action-text" onclick="deleteCustomer(event, '${customer.id}')">삭제</button>
-                    </div>
-                </div>
-                <div class="card-body">
-                    <p><strong>고객명:</strong> ${customer.customerName || '-'}</p>
-                    <p><strong>연락처:</strong> ${phoneLink}</p>
-                    <p><strong>주소:</strong> ${customer.workAddress || '-'}</p>
-                    <p><strong>견적일:</strong> ${customer.estimateDate}</p>
-                    <p><strong>견적액:</strong> ${customer.totalAmount}</p>
-                </div>
+        const deadlineDate = customer.deadlineDate ? new Date(customer.deadlineDate) : null;
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        let deadlineHTML = '';
+        if (deadlineDate) {
+            const diffTime = deadlineDate.getTime() - today.getTime();
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            let className = 'normal';
+            if (diffDays < 0) className = 'overdue';
+            else if (diffDays === 0) className = 'today';
+            else if (diffDays <= 3) className = 'urgent';
+            deadlineHTML = `<div class="customer-deadline ${className}">마감 ${diffDays < 0 ? '지남' : 'D-' + diffDays}</div>`;
+        }
+
+        card.innerHTML = `
+            <div class="customer-name">${customer.siteName || customer.customerName}</div>
+            <div class="customer-info">${customer.customerName} / <a href="tel:${customer.customerPhone}">${customer.customerPhone}</a></div>
+            <div class="customer-info">${customer.workAddress}</div>
+            <div class="customer-date">견적일: ${customer.estimateDate}</div>
+            ${deadlineHTML}
+            <div class="customer-item-buttons">
+                <button class="btn-edit" onclick="event.stopPropagation(); viewEstimateDetails(event, '${customer.id}');">수정</button>
+                <button class="btn-delete" onclick="event.stopPropagation(); deleteCustomer(event, '${customer.id}');">삭제</button>
             </div>
         `;
-    }).join('');
+        listContainer.appendChild(card);
+    });
 }
 
 async function deleteCustomer(event, customerId) {
     event.stopPropagation();
     if (confirm('이 고객 정보를 정말로 삭제하시겠습니까?')) {
-        let customers = await loadData(STORES.CUSTOMERS) || [];
-        customers = customers.filter(c => c.id !== customerId);
-        await saveData(STORES.CUSTOMERS, customers);
-        loadCustomers();
+        try {
+            if (!db) return alert("DB not initialized");
+            const transaction = db.transaction(STORES.CUSTOMERS, 'readwrite');
+            const store = transaction.objectStore(STORES.CUSTOMERS);
+            const request = store.delete(customerId);
+            request.onsuccess = async () => {
+                await loadCustomers();
+            };
+            request.onerror = () => {
+                alert('삭제에 실패했습니다.');
+            };
+        } catch (error) {
+            console.error('Failed to delete customer:', error);
+        }
     }
 }
 
 async function viewEstimateDetails(event, customerId) {
     event.stopPropagation();
-    const customers = await loadData(STORES.CUSTOMERS) || [];
-    const customer = customers.find(c => c.id === customerId);
-    if (customer) {
-        document.getElementById('companyName').value = customer.companyName;
-        document.getElementById('manager').value = customer.manager;
-        document.getElementById('phone').value = customer.phone;
-        formatPhoneNumber(document.getElementById('phone'));
-        document.getElementById('siteName').value = customer.siteName;
-        document.getElementById('customerName').value = customer.customerName;
-        document.getElementById('customerPhone').value = customer.customerPhone;
-        formatPhoneNumber(document.getElementById('customerPhone'));
-        document.getElementById('workAddress').value = customer.workAddress;
-        document.getElementById('estimateDate').value = customer.estimateDate;
-        document.getElementById('deadlineDate').value = customer.deadlineDate || '';
-        document.getElementById('notes').value = customer.notes;
-        
-        const workItemsContainer = document.getElementById('workItems');
-        workItemsContainer.innerHTML = '';
-        if (customer.workItems && customer.workItems.length > 0) {
-            customer.workItems.forEach(item => {
-                // 수량과 단가에 천단위 쉼표 적용
-                const formattedItem = {
-                    name: item.name,
-                    quantity: item.quantity ? Number(item.quantity).toLocaleString() : '',
-                    unit: item.unit,
-                    price: item.price ? Number(item.price).toLocaleString() : ''
-                };
-                addWorkItem(formattedItem);
-            });
-        } else {
-            addWorkItem(); // 비어있을 경우 기본 항목 추가
+    try {
+        const customer = await loadData(STORES.CUSTOMERS, customerId);
+        if (customer) {
+            document.getElementById('companyName').value = customer.companyName;
+            document.getElementById('manager').value = customer.manager;
+            document.getElementById('phone').value = customer.phone;
+            formatPhoneNumber(document.getElementById('phone'));
+            document.getElementById('siteName').value = customer.siteName;
+            document.getElementById('customerName').value = customer.customerName;
+            document.getElementById('customerPhone').value = customer.customerPhone;
+            formatPhoneNumber(document.getElementById('customerPhone'));
+            document.getElementById('workAddress').value = customer.workAddress;
+            document.getElementById('estimateDate').value = customer.estimateDate;
+            document.getElementById('deadlineDate').value = customer.deadlineDate || '';
+            document.getElementById('notes').value = customer.notes;
+            
+            const workItemsContainer = document.getElementById('workItems');
+            workItemsContainer.innerHTML = '';
+            if (customer.workItems && customer.workItems.length > 0) {
+                customer.workItems.forEach(item => addWorkItem(item));
+            } else {
+                addWorkItem();
+            }
+            
+            updateTotalAmount();
+            document.getElementById('editingEstimateId').value = customer.id;
+            showPage('estimate');
+            window.scrollTo(0, 0);
         }
-        
-        updateTotalAmount();
-        document.getElementById('editingEstimateId').value = customer.id;
-        showPage('estimate');
-        window.scrollTo(0, 0);
+    } catch(error) {
+        console.error('Failed to view estimate:', error);
     }
 }
 
 function clearEstimateForm() {
-    // 회사 정보를 제외한 필드만 초기화
     document.getElementById('siteName').value = '';
     document.getElementById('customerName').value = '';
     document.getElementById('customerPhone').value = '';
@@ -933,19 +666,12 @@ function clearEstimateForm() {
     document.getElementById('deadlineDate').value = '';
     document.getElementById('notes').value = '';
     
-    // 공사 항목 초기화
     document.getElementById('workItems').innerHTML = '';
     addWorkItem();
     
-    // 견적일자는 오늘 날짜로 설정
     document.getElementById('estimateDate').value = new Date().toISOString().split('T')[0];
-    
-    // 편집 중인 ID 초기화
     document.getElementById('editingEstimateId').value = '';
     
-    // 회사 정보 유지 (loadCompanyInfo 호출 제거)
-    
-    // 총 금액 업데이트
     updateTotalAmount();
 }
 
@@ -965,15 +691,10 @@ function formatPhoneNumber(input) {
 
 async function exportData() {
     try {
-        const companyInfo = await loadData(STORES.COMPANY, 'companyInfo');
+        const companyInfo = await loadData(STORES.COMPANY, 'main');
         const customers = await loadData(STORES.CUSTOMERS);
-        const customFont = localStorage.getItem('customFont'); // 폰트는 여전히 localStorage에서 관리
         
-        const data = {
-            companyInfo,
-            customers,
-            font: customFont
-        };
+        const data = { companyInfo, customers };
         
         const dataStr = JSON.stringify(data, null, 2);
         const blob = new Blob([dataStr], {type: "application/json"});
@@ -1004,11 +725,14 @@ async function handleFileImport(event) {
         try {
             const data = JSON.parse(e.target.result);
             if (confirm('데이터를 불러오면 현재 모든 데이터가 덮어씌워집니다. 계속하시겠습니까?')) {
-                if(data.companyInfo) await saveData(STORES.COMPANY, data.companyInfo, 'companyInfo');
-                if(data.customers) await saveData(STORES.CUSTOMERS, data.customers);
-                if(data.font) {
-                    localStorage.setItem('customFont', data.font);
-                    window.font = data.font;
+                if(data.companyInfo) await saveData(STORES.COMPANY, data.companyInfo);
+                if(data.customers && Array.isArray(data.customers)) {
+                    const transaction = db.transaction(STORES.CUSTOMERS, 'readwrite');
+                    const store = transaction.objectStore(STORES.CUSTOMERS);
+                    await store.clear();
+                    for (const customer of data.customers) {
+                        await store.put(customer);
+                    }
                 }
                 alert('데이터를 성공적으로 불러왔습니다. 페이지를 새로고침합니다.');
                 location.reload();
@@ -1063,94 +787,28 @@ async function sharePDF() {
 
 async function clearAllData() {
     if (confirm('정말로 모든 회사 정보와 고객 데이터를 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.')) {
-        if (db) {
-            // IndexedDB 데이터 삭제
-            const transaction = db.transaction([STORES.COMPANY, STORES.CUSTOMERS, STORES.SETTINGS], 'readwrite');
-            transaction.objectStore(STORES.COMPANY).clear();
-            transaction.objectStore(STORES.CUSTOMERS).clear();
-            transaction.objectStore(STORES.SETTINGS).clear();
+        try {
+            const companyStore = db.transaction(STORES.COMPANY, 'readwrite').objectStore(STORES.COMPANY);
+            await companyStore.clear();
+            const customerStore = db.transaction(STORES.CUSTOMERS, 'readwrite').objectStore(STORES.CUSTOMERS);
+            await customerStore.clear();
+            alert('모든 데이터가 삭제되었습니다. 페이지를 새로고침합니다.');
+            location.reload();
+        } catch (error) {
+            alert('데이터 삭제에 실패했습니다.');
         }
-        
-        // localStorage 데이터도 삭제
-        localStorage.clear();
-        
-        alert('모든 데이터가 삭제되었습니다. 페이지를 새로고침합니다.');
-        location.reload();
     }
 }
 
-// 설정 페이지에 파일 시스템 연동 옵션 추가
-function addFileSystemOption() {
-    const settingsContainer = document.querySelector('#settingsPage .form-container');
-    if (!settingsContainer) return;
-    
-    // 이미 옵션이 있는지 확인
-    if (document.getElementById('fileSystemOption')) return;
-    
-    const fileSystemOption = document.createElement('div');
-    fileSystemOption.id = 'fileSystemOption';
-    fileSystemOption.className = 'section';
-    fileSystemOption.innerHTML = `
-        <div class="section-title">파일 시스템 연동</div>
-        <div class="form-group">
-            <p>데이터를 로컬 파일 시스템과 연동하여 브라우저 캐시가 삭제되어도 데이터를 유지할 수 있습니다.</p>
-            <button id="enableFileSystemBtn" class="btn btn-primary" style="margin-top: 10px;">파일 시스템 연동 설정</button>
-            <div id="fileSystemStatus" style="margin-top: 10px; display: none;">
-                <p style="color: green;">✅ 파일 시스템 연동이 활성화되었습니다.</p>
-            </div>
-        </div>
-    `;
-    
-    // 데이터 관리 섹션 앞에 삽입
-    const dataManagementSection = document.querySelector('#settingsPage .section:nth-child(2)');
-    if (dataManagementSection) {
-        dataManagementSection.parentNode.insertBefore(fileSystemOption, dataManagementSection);
-    } else {
-        settingsContainer.appendChild(fileSystemOption);
-    }
-    
-    // 버튼 이벤트 리스너 추가
-    setTimeout(() => {
-        const enableBtn = document.getElementById('enableFileSystemBtn');
-        if (enableBtn) {
-            enableBtn.addEventListener('click', async () => {
-                const success = await requestFileSystemAccess();
-                if (success) {
-                    document.getElementById('fileSystemStatus').style.display = 'block';
-                    localStorage.setItem('fileSystemEnabled', 'true');
-                    syncEnabled = true;
-                }
-            });
-        }
-        
-        // 이미 활성화되어 있으면 상태 표시
-        if (localStorage.getItem('fileSystemEnabled') === 'true') {
-            const statusDiv = document.getElementById('fileSystemStatus');
-            if (statusDiv) {
-                statusDiv.style.display = 'block';
-            }
-        }
-    }, 500);
-}
-
-// 페이지 로드 시 DB 초기화
 document.addEventListener('DOMContentLoaded', async () => {
-    await initDB();
-    
-    // 파일 시스템 옵션 추가
-    addFileSystemOption();
-    
-    // 파일 시스템 연동이 활성화되어 있으면 데이터 동기화
-    if (localStorage.getItem('fileSystemEnabled') === 'true') {
-        await syncDataFromFile();
+    try {
+        await initDB();
+        await loadCompanyInfo();
+        const activePage = document.querySelector('.container.active').id.replace('Page', '');
+        showPage(activePage);
+    } catch (error) {
+        console.error("Initialization failed:", error);
     }
-    
-    // 초기화 후 데이터 로드
-    loadCompanyInfo();
-    
-    // 페이지 상태에 따라 데이터 로드
-    const activePage = document.querySelector('.container.active').id.replace('Page', '');
-    showPage(activePage);
 });
 
 // 전역 스코프에 함수 노출
@@ -1175,4 +833,3 @@ window.closePdfActionModal = closePdfActionModal;
 window.downloadPDF = downloadPDF;
 window.sharePDF = sharePDF;
 window.clearAllData = clearAllData;
-window.requestFileSystemAccess = requestFileSystemAccess;
