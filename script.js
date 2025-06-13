@@ -342,37 +342,116 @@ async function generatePDF() {
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF();
 
-    // 폰트 추가
     doc.addFileToVFS('malgun.ttf', font);
     doc.addFont('malgun.ttf', 'malgun', 'normal');
     doc.setFont('malgun');
 
-    // PDF 내용 작성...
-    doc.text(companyName, 15, 20);
-    doc.text(`담당자: ${manager}`, 15, 28);
-    // ...
-
-    // PDF 파일 생성 및 전역 변수에 저장
     try {
-        const pdfBlob = doc.output('blob');
-        const siteName = document.getElementById('siteName').value || '견적서';
-        const fileName = `${siteName.replace(/[\/\\?%*:|"<>]/g, '-')}.pdf`;
+        // --- 데이터 수집 ---
+        const companyName = document.getElementById('companyName').value;
+        const manager = document.getElementById('manager').value;
+        const phone = document.getElementById('phone').value;
+        const companyInfo = JSON.parse(localStorage.getItem('companyInfo')) || {};
+        const address = companyInfo.address || '';
+
+        const siteName = document.getElementById('siteName').value;
+        const customerName = document.getElementById('customerName').value;
+        const customerPhone = document.getElementById('customerPhone').value;
+        const workAddress = document.getElementById('workAddress').value;
+        const estimateDate = document.getElementById('estimateDate').value;
+        const deadlineDate = document.getElementById('deadlineDate').value;
         
-        generatedPdfDoc = doc; // 이전 버전 호환성을 위해 유지
+        const totalAmount = document.getElementById('totalAmount').textContent;
+        const notes = document.getElementById('notes').value;
+
+        const workItems = [];
+        document.querySelectorAll('#workItems .work-item').forEach(item => {
+            const name = item.querySelector('.work-name').value;
+            const quantity = item.querySelector('.work-quantity').value;
+            const unit = item.querySelector('.work-unit').value;
+            const price = item.querySelector('.work-price').value;
+            if (name) {
+                workItems.push({ name, quantity, unit, price });
+            }
+        });
+
+        // --- PDF 내용 생성 ---
+        doc.setFontSize(22);
+        doc.text("견 적 서", 105, 20, { align: 'center' });
+        
+        doc.setFontSize(10);
+        doc.text(`견적일: ${estimateDate}`, 195, 30, { align: 'right' });
+
+        doc.autoTable({
+            startY: 35,
+            head: [['공급자 (회사 정보)']],
+            body: [
+                [`회사명: ${companyName}`],
+                [`담당자: ${manager}`],
+                [`연락처: ${phone}`],
+                [`주소: ${address}`]
+            ],
+            theme: 'grid',
+            styles: { font: 'malgun', fontStyle: 'normal' },
+            headStyles: { font: 'malgun' }
+        });
+        
+        doc.autoTable({
+            head: [['공급받는 자 (고객 정보)']],
+            body: [
+                [`현장명: ${siteName}`],
+                [`고객명: ${customerName}`],
+                [`연락처: ${customerPhone}`],
+                [`공사 주소: ${workAddress}`],
+                [`제출 마감일: ${deadlineDate || '없음'}`]
+            ],
+            theme: 'grid',
+            styles: { font: 'malgun', fontStyle: 'normal' },
+            headStyles: { font: 'malgun' }
+        });
+        
+        const workItemsBody = workItems.map((item, index) => [
+            index + 1, item.name, item.quantity || '0', item.unit,
+            item.price ? Number(item.price).toLocaleString() : '0',
+            (item.quantity && item.price) ? (Number(item.quantity) * Number(item.price)).toLocaleString() : '0'
+        ]);
+        
+        doc.autoTable({
+            head: [['No.', '공사 항목', '수량', '단위', '단가', '금액']],
+            body: workItemsBody,
+            headStyles: { halign: 'center', font: 'malgun' },
+            columnStyles: {
+                0: { halign: 'center' }, 2: { halign: 'right' }, 3: { halign: 'center' },
+                4: { halign: 'right' }, 5: { halign: 'right' }
+            }
+        });
+        
+        const finalY = doc.autoTable.previous.finalY;
+        doc.setFontSize(12);
+        doc.text(`총 견적 금액: ${totalAmount}`, 195, finalY + 10, { align: 'right' });
+        
+        doc.setFontSize(10);
+        doc.text("특이사항", 14, finalY + 20);
+        doc.autoTable({
+            startY: finalY + 22,
+            body: [[notes || '없음']],
+            theme: 'plain',
+            styles: { font: 'malgun' }
+        });
+
+        const pdfBlob = doc.output('blob');
+        const fileName = `${siteName.replace(/[\/\\?%*:|"<>]/g, '-') || '견적서'}.pdf`;
+        
+        generatedPdfDoc = doc;
         generatedPdfFile = new File([pdfBlob], fileName, { type: 'application/pdf' });
-        generatedPdfSiteName = siteName;
+        generatedPdfSiteName = siteName || '견적서';
         
         document.getElementById('pdfActionModal').style.display = 'flex';
 
     } catch(e) {
         console.error("PDF 생성 중 오류 발생:", e);
-        alert("PDF를 생성하는 중에 오류가 발생했습니다. 폰트 파일이 올바른지 확인해주세요.");
+        alert("PDF를 생성하는 중에 오류가 발생했습니다. 개발자 콘솔을 확인해주세요.");
     }
-}
-
-function saveEstimateAndClear() {
-    saveEstimate(true); // 알림을 표시하도록 true 전달
-    clearEstimateForm();
 }
 
 function saveEstimate(showAlert = false) {
@@ -392,7 +471,15 @@ function saveEstimate(showAlert = false) {
         workItems: []
     };
 
-    // ... (기존 workItems 수집 코드)
+    document.querySelectorAll('#workItems .work-item').forEach(item => {
+        const name = item.querySelector('.work-name').value;
+        const quantity = item.querySelector('.work-quantity').value;
+        const unit = item.querySelector('.work-unit').value;
+        const price = item.querySelector('.work-price').value;
+        if (name) {
+            customer.workItems.push({ name, quantity, unit, price });
+        }
+    });
 
     if (!customer.siteName && !customer.customerName) {
         if (showAlert) {
@@ -769,7 +856,6 @@ window.addWorkItem = addWorkItem;
 window.removeWorkItem = removeWorkItem;
 window.generatePDF = generatePDF;
 window.clearEstimateForm = clearEstimateForm;
-window.saveEstimateAndClear = saveEstimateAndClear;
 window.saveCompanyInfo = saveCompanyInfo;
 window.exportData = exportData;
 window.importData = importData;
