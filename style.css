@@ -19,6 +19,7 @@ body {
     box-shadow: 0 20px 40px rgba(0,0,0,0.1);
     overflow: hidden;
     display: none;
+    padding: 80px 15px 15px;
 }
 
 .container.active {
@@ -31,6 +32,7 @@ body {
     padding: 20px;
     text-align: center;
     position: relative;
+    margin-bottom: 20px;
 }
 
 .header h1 {
@@ -305,8 +307,61 @@ body {
 }
 
 .customer-list {
-    max-height: 400px;
-    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.customer-card {
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    padding: 15px;
+}
+
+.card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 10px;
+    margin-bottom: 10px;
+}
+
+.card-header strong {
+    font-size: 1.1em;
+}
+
+.card-actions {
+    display: flex;
+    gap: 5px;
+}
+
+.card-actions .btn-icon {
+    font-size: 24px;
+    padding: 8px;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    transition: transform 0.2s, color 0.2s;
+}
+
+.card-actions .btn-icon:hover {
+    transform: scale(1.15);
+    color: #667eea;
+}
+
+.card-body p {
+    margin: 5px 0;
+    color: #555;
+    font-size: 1em;
+}
+
+.customer-phone-link {
+    color: #007bff;
+    text-decoration: underline;
+    font-size: 1.1em;
+    font-weight: bold;
 }
 
 .customer-item {

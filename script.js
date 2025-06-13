@@ -500,24 +500,30 @@ function main() {
             return;
         }
 
-        listElement.innerHTML = customers.map(customer => `
-            <div class="customer-card">
-                <div class="card-header">
-                    <strong>${customer.siteName || '이름 없는 현장'}</strong>
-                    <div class="card-actions">
-                        <button class="btn-icon" onclick="viewEstimateDetails(event, '${customer.id}')">✏️</button>
-                        <button class="btn-icon" onclick="deleteCustomer(event, '${customer.id}')">🗑️</button>
+        listElement.innerHTML = customers.map(customer => {
+            const phoneLink = customer.customerPhone 
+                ? `<a href="tel:${customer.customerPhone.replace(/\D/g, '')}" class="customer-phone-link" onclick="event.stopPropagation()">${customer.customerPhone}</a>`
+                : '-';
+
+            return `
+                <div class="customer-card">
+                    <div class="card-header">
+                        <strong>${customer.siteName || '이름 없는 현장'}</strong>
+                        <div class="card-actions">
+                            <button class="btn-icon" onclick="viewEstimateDetails(event, '${customer.id}')">✏️</button>
+                            <button class="btn-icon" onclick="deleteCustomer(event, '${customer.id}')">🗑️</button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <p><strong>고객명:</strong> ${customer.customerName || '-'}</p>
+                        <p><strong>연락처:</strong> ${phoneLink}</p>
+                        <p><strong>주소:</strong> ${customer.workAddress || '-'}</p>
+                        <p><strong>견적일:</strong> ${customer.estimateDate}</p>
+                        <p><strong>견적액:</strong> ${customer.totalAmount}</p>
                     </div>
                 </div>
-                <div class="card-body">
-                    <p><strong>고객명:</strong> ${customer.customerName || '-'}</p>
-                    <p><strong>연락처:</strong> ${customer.customerPhone || '-'}</p>
-                    <p><strong>주소:</strong> ${customer.workAddress || '-'}</p>
-                    <p><strong>견적일:</strong> ${customer.estimateDate}</p>
-                    <p><strong>견적액:</strong> ${customer.totalAmount}</p>
-                </div>
-            </div>
-        `).join('');
+            `;
+        }).join('');
     }
 
     function deleteCustomer(event, customerId) {
