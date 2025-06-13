@@ -10,6 +10,10 @@ let generatedPdfSiteName = '';
 // 폰트 데이터 캐싱을 위한 변수
 let nanumGothicFont = null;
 
+// 파일 시스템 관련 변수
+let fileHandle;
+let syncEnabled = false;
+
 // IndexedDB 관련 변수 및 초기화
 let db;
 const DB_NAME = 'estimateAppDB';
@@ -195,6 +199,13 @@ function initDB() {
         request.onsuccess = (event) => {
             db = event.target.result;
             console.log('IndexedDB 연결 성공');
+            
+            // 파일 시스템 접근 가능 여부 확인
+            if ('showDirectoryPicker' in window) {
+                // 이전에 저장된 파일 핸들이 있는지 확인
+                loadFileHandle();
+            }
+            
             resolve(true);
         };
         
@@ -219,8 +230,148 @@ function initDB() {
     });
 }
 
-// 데이터 저장 함수 (IndexedDB 또는 localStorage)
-function saveData(storeName, data, key = null) {
+// 파일 시스템 접근 권한 요청
+async function requestFileSystemAccess() {
+    try {
+        // 파일 시스템 접근 권한 요청
+        fileHandle = await window.showDirectoryPicker({
+            id: 'estimateAppData',
+            mode: 'readwrite',
+            startIn: 'documents'
+        });
+        
+        // 권한 확인
+        const permission = await fileHandle.requestPermission({ mode: 'readwrite' });
+        if (permission !== 'granted') {
+            alert('파일 시스템 접근 권한이 필요합니다.');
+            return false;
+        }
+        
+        // 파일 핸들 저장
+        saveFileHandle();
+        
+        // 파일 시스템 동기화 활성화
+        syncEnabled = true;
+        
+        // 현재 데이터 동기화
+        await syncDataToFile();
+        
+        return true;
+    } catch (error) {
+        console.error('파일 시스템 접근 오류:', error);
+        alert('파일 시스템 접근에 실패했습니다.');
+        return false;
+    }
+}
+
+// 파일 핸들 저장
+function saveFileHandle() {
+    if (!fileHandle) return;
+    
+    // FileSystemHandle은 직렬화할 수 없으므로 IndexedDB에 저장
+    if (navigator.storage && navigator.storage.persist) {
+        navigator.storage.persist().then(isPersisted => {
+            console.log(`영구 저장소 권한: ${isPersisted ? '획득' : '거부'}`);
+        });
+    }
+}
+
+// 파일 핸들 로드
+async function loadFileHandle() {
+    try {
+        // 이전에 저장된 파일 핸들이 있는지 확인
+        if (localStorage.getItem('fileSystemEnabled') === 'true') {
+            // 사용자에게 파일 시스템 접근 권한 요청
+            const confirmed = confirm('로컬 파일 시스템과 데이터를 동기화하시겠습니까?');
+            if (confirmed) {
+                await requestFileSystemAccess();
+            }
+        }
+    } catch (error) {
+        console.error('파일 핸들 로드 오류:', error);
+    }
+}
+
+// 데이터를 파일로 동기화
+async function syncDataToFile() {
+    if (!syncEnabled || !fileHandle) return;
+    
+    try {
+        // 모든 데이터 로드
+        const companyInfo = await loadData(STORES.COMPANY, 'companyInfo');
+        const customers = await loadData(STORES.CUSTOMERS);
+        const customFont = localStorage.getItem('customFont');
+        
+        // 데이터 객체 생성
+        const data = {
+            companyInfo,
+            customers,
+            font: customFont,
+            lastSync: new Date().toISOString()
+        };
+        
+        // JSON 문자열로 변환
+        const jsonData = JSON.stringify(data, null, 2);
+        
+        // 파일 생성 또는 업데이트
+        const dataFile = await getFileFromDirectory(fileHandle, 'estimate_data.json');
+        const writable = await dataFile.createWritable();
+        await writable.write(jsonData);
+        await writable.close();
+        
+        console.log('데이터가 파일로 동기화되었습니다.');
+        return true;
+    } catch (error) {
+        console.error('파일 동기화 오류:', error);
+        return false;
+    }
+}
+
+// 파일에서 데이터 동기화
+async function syncDataFromFile() {
+    if (!syncEnabled || !fileHandle) return;
+    
+    try {
+        // 파일 읽기
+        const dataFile = await getFileFromDirectory(fileHandle, 'estimate_data.json');
+        const fileData = await dataFile.getFile();
+        const jsonData = await fileData.text();
+        
+        // JSON 파싱
+        const data = JSON.parse(jsonData);
+        
+        // 데이터 저장
+        if (data.companyInfo) await saveData(STORES.COMPANY, data.companyInfo, 'companyInfo');
+        if (data.customers) await saveData(STORES.CUSTOMERS, data.customers);
+        if (data.font) localStorage.setItem('customFont', data.font);
+        
+        console.log('파일에서 데이터가 동기화되었습니다.');
+        return true;
+    } catch (error) {
+        if (error.name === 'NotFoundError') {
+            // 파일이 없는 경우 초기 동기화 수행
+            await syncDataToFile();
+        } else {
+            console.error('파일에서 데이터 동기화 오류:', error);
+        }
+        return false;
+    }
+}
+
+// 디렉토리에서 파일 가져오기 (없으면 생성)
+async function getFileFromDirectory(dirHandle, fileName) {
+    try {
+        // 파일이 이미 존재하는지 확인
+        const fileHandle = await dirHandle.getFileHandle(fileName, { create: true });
+        return fileHandle;
+    } catch (error) {
+        console.error('파일 접근 오류:', error);
+        throw error;
+    }
+}
+
+// 기존 함수 수정
+async function saveData(storeName, data, key = null) {
     return new Promise((resolve, reject) => {
         if (db) {
             // IndexedDB 사용
@@ -239,7 +390,14 @@ function saveData(storeName, data, key = null) {
                     request = store.put(data);
                 }
                 
-                request.onsuccess = () => resolve(true);
+                request.onsuccess = async () => {
+                    // 데이터 저장 후 파일 동기화
+                    if (syncEnabled) {
+                        await syncDataToFile();
+                    }
+                    resolve(true);
+                };
+                
                 request.onerror = (e) => {
                     console.error('IndexedDB 저장 오류:', e.target.error);
                     // 에러 발생 시 localStorage로 폴백
@@ -911,9 +1069,71 @@ async function clearAllData() {
     }
 }
 
+// 설정 페이지에 파일 시스템 연동 옵션 추가
+function addFileSystemOption() {
+    const settingsContainer = document.querySelector('#settingsPage .form-container');
+    if (!settingsContainer) return;
+    
+    // 이미 옵션이 있는지 확인
+    if (document.getElementById('fileSystemOption')) return;
+    
+    const fileSystemOption = document.createElement('div');
+    fileSystemOption.id = 'fileSystemOption';
+    fileSystemOption.className = 'section';
+    fileSystemOption.innerHTML = `
+        <div class="section-title">파일 시스템 연동</div>
+        <div class="form-group">
+            <p>데이터를 로컬 파일 시스템과 연동하여 브라우저 캐시가 삭제되어도 데이터를 유지할 수 있습니다.</p>
+            <button id="enableFileSystemBtn" class="btn btn-primary" style="margin-top: 10px;">파일 시스템 연동 설정</button>
+            <div id="fileSystemStatus" style="margin-top: 10px; display: none;">
+                <p style="color: green;">✅ 파일 시스템 연동이 활성화되었습니다.</p>
+            </div>
+        </div>
+    `;
+    
+    // 데이터 관리 섹션 앞에 삽입
+    const dataManagementSection = document.querySelector('#settingsPage .section:nth-child(2)');
+    if (dataManagementSection) {
+        dataManagementSection.parentNode.insertBefore(fileSystemOption, dataManagementSection);
+    } else {
+        settingsContainer.appendChild(fileSystemOption);
+    }
+    
+    // 버튼 이벤트 리스너 추가
+    setTimeout(() => {
+        const enableBtn = document.getElementById('enableFileSystemBtn');
+        if (enableBtn) {
+            enableBtn.addEventListener('click', async () => {
+                const success = await requestFileSystemAccess();
+                if (success) {
+                    document.getElementById('fileSystemStatus').style.display = 'block';
+                    localStorage.setItem('fileSystemEnabled', 'true');
+                    syncEnabled = true;
+                }
+            });
+        }
+        
+        // 이미 활성화되어 있으면 상태 표시
+        if (localStorage.getItem('fileSystemEnabled') === 'true') {
+            const statusDiv = document.getElementById('fileSystemStatus');
+            if (statusDiv) {
+                statusDiv.style.display = 'block';
+            }
+        }
+    }, 500);
+}
+
 // 페이지 로드 시 DB 초기화
 document.addEventListener('DOMContentLoaded', async () => {
     await initDB();
+    
+    // 파일 시스템 옵션 추가
+    addFileSystemOption();
+    
+    // 파일 시스템 연동이 활성화되어 있으면 데이터 동기화
+    if (localStorage.getItem('fileSystemEnabled') === 'true') {
+        await syncDataFromFile();
+    }
     
     // 초기화 후 데이터 로드
     loadCompanyInfo();
@@ -945,3 +1165,4 @@ window.closePdfActionModal = closePdfActionModal;
 window.downloadPDF = downloadPDF;
 window.sharePDF = sharePDF;
 window.clearAllData = clearAllData;
+window.requestFileSystemAccess = requestFileSystemAccess;
