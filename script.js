@@ -230,7 +230,11 @@ function saveData(storeName, data, key = null) {
                 
                 let request;
                 if (key) {
-                    request = store.put({ key, value: data });
+                    // key가 문자열인 경우 (companyInfo 같은 경우)
+                    request = store.put({
+                        id: key,
+                        data: data
+                    });
                 } else {
                     request = store.put(data);
                 }
@@ -275,7 +279,12 @@ function loadData(storeName, key = null) {
                 
                 request.onsuccess = (event) => {
                     if (key) {
-                        resolve(event.target.result ? event.target.result.value : null);
+                        const result = event.target.result;
+                        if (result) {
+                            resolve(result.data || result.value || null);
+                        } else {
+                            resolve(null);
+                        }
                     } else {
                         resolve(event.target.result || []);
                     }
@@ -310,7 +319,17 @@ async function saveCompanyInfo() {
         address: document.getElementById('settingsAddress').value
     };
     
+    // 먼저 localStorage에도 저장 (백업)
+    localStorage.setItem('companyInfo', JSON.stringify(companyInfo));
+    
+    // 그 다음 IndexedDB에 저장
     await saveData(STORES.COMPANY, companyInfo, 'companyInfo');
+    
+    // 저장 후 견적서 페이지의 회사 정보도 업데이트
+    document.getElementById('companyName').value = companyInfo.name || '';
+    document.getElementById('manager').value = companyInfo.manager || '';
+    document.getElementById('phone').value = companyInfo.phone || '';
+    formatPhoneNumber(document.getElementById('phone'));
     
     const messageDiv = document.getElementById('companySavedMessage');
     messageDiv.style.display = 'block';
@@ -320,7 +339,21 @@ async function saveCompanyInfo() {
 }
 
 async function loadCompanyInfo() {
-    const companyInfo = await loadData(STORES.COMPANY, 'companyInfo') || {};
+    // 먼저 IndexedDB에서 시도
+    let companyInfo = await loadData(STORES.COMPANY, 'companyInfo');
+    
+    // IndexedDB에서 실패하면 localStorage에서 로드
+    if (!companyInfo) {
+        const localData = localStorage.getItem('companyInfo');
+        if (localData) {
+            companyInfo = JSON.parse(localData);
+            // localStorage에서 로드한 데이터를 IndexedDB에도 저장
+            await saveData(STORES.COMPANY, companyInfo, 'companyInfo');
+        } else {
+            companyInfo = {};
+        }
+    }
+    
     document.getElementById('companyName').value = companyInfo.name || '';
     document.getElementById('manager').value = companyInfo.manager || '';
     document.getElementById('phone').value = companyInfo.phone || '';
@@ -328,7 +361,19 @@ async function loadCompanyInfo() {
 }
 
 async function loadSettingsCompanyInfo() {
-    const companyInfo = await loadData(STORES.COMPANY, 'companyInfo') || {};
+    // 먼저 IndexedDB에서 시도
+    let companyInfo = await loadData(STORES.COMPANY, 'companyInfo');
+    
+    // IndexedDB에서 실패하면 localStorage에서 로드
+    if (!companyInfo) {
+        const localData = localStorage.getItem('companyInfo');
+        if (localData) {
+            companyInfo = JSON.parse(localData);
+        } else {
+            companyInfo = {};
+        }
+    }
+    
     document.getElementById('settingsCompanyName').value = companyInfo.name || '';
     document.getElementById('settingsManager').value = companyInfo.manager || '';
     document.getElementById('settingsPhone').value = companyInfo.phone || '';
