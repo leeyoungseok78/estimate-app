@@ -202,12 +202,16 @@
 
             <!-- 데이터 관리 -->
             <div class="section">
-                <div class="section-title">데이터 관리</div>
+                <div class="section-title">데이터 관리 (자동 저장)</div>
+                <p class="description">
+                    PC나 스마트폰의 특정 폴더를 지정하여 데이터를 안전하게 파일로 관리합니다. 한번 연결하면 모든 정보가 해당 폴더에 자동으로 저장되고 불러와집니다.
+                </p>
                 <div class="btn-group">
-                    <button class="btn btn-secondary" onclick="exportData()">데이터 내보내기</button>
-                    <button class="btn btn-secondary" onclick="importData()">데이터 불러오기</button>
+                    <button class="btn btn-primary" onclick="connectFileSystem()">📂 데이터 폴더 연결</button>
                 </div>
-                <input type="file" id="importFile" accept=".json" style="display: none;" onchange="handleFileImport(event)">
+                <div id="fileSystemStatus" class="status-message">
+                    연결 상태: <span class="status-disconnected">연결되지 않음</span>
+                </div>
             </div>
 
             <!-- 앱 정보 -->
