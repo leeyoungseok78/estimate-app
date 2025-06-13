@@ -252,26 +252,22 @@ function main() {
     }
     
     function loadSavedFontData() {
-        const fontData = localStorage.getItem('customFont');
-        if (fontData) {
-            window.font = fontData;
-            updateFontStatus(true, '저장된 폰트가 성공적으로 로드되었습니다.');
+        if (window.font) {
+            updateFontStatus(true, '내장 폰트가 성공적으로 로드되었습니다.');
         } else {
-            updateFontStatus(false, '설정된 한글 폰트가 없습니다.');
+            updateFontStatus(false, '내장 폰트를 로드할 수 없습니다.');
         }
     }
 
     async function generatePDF() {
-        if (!font) {
-            alert('PDF 생성을 위한 한글 폰트가 설정되지 않았습니다. 설정 페이지에서 폰트를 업로드해주세요.');
-            showFontGuide();
+        if (!window.font) {
+            alert('PDF 생성을 위한 필수 폰트 파일(font.js)이 로드되지 않았습니다.');
             return;
         }
 
-        const { jsPDF } = window.jspdf;
-        const doc = new jsPDF();
+        const doc = new window.jspdf.jsPDF();
 
-        doc.addFileToVFS('malgun.ttf', font);
+        doc.addFileToVFS('malgun.ttf', window.font);
         doc.addFont('malgun.ttf', 'malgun', 'normal');
         doc.setFont('malgun');
 

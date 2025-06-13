@@ -9,11 +9,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="철거견적서">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
     <link rel="stylesheet" href="./style.css">
-    <script src="./font.js" defer></script>
-    <script src="./script.js" defer></script>
 </head>
 <body>
     <!-- 네비게이션 -->
@@ -294,5 +290,11 @@
             </div>
         </div>
     </div>
+
+    <!-- 모든 스크립트를 body 맨 끝으로 이동하여 로딩 오류를 근본적으로 해결 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
+    <script src="./font.js"></script>
+    <script src="./script.js"></script>
 </body>
 </html>
