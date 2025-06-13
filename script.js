@@ -80,6 +80,7 @@ loadCompanyInfo();
 // 페이지 로드 시 기존 항목에 대한 금액 계산 이벤트 리스너 추가
 document.querySelectorAll('#workItems .work-quantity, #workItems .work-price').forEach(input => {
     input.addEventListener('input', updateTotalAmount);
+    input.addEventListener('input', () => formatNumberInput(input));
 });
 
 document.querySelectorAll('.nav-btn').forEach(btn => {
@@ -150,8 +151,8 @@ function checkDeadlines() {
 function updateTotalAmount() {
     let total = 0;
     document.querySelectorAll('#workItems .work-item').forEach(item => {
-        const quantity = parseFloat(item.querySelector('.work-quantity').value) || 0;
-        const price = parseFloat(item.querySelector('.work-price').value) || 0;
+        const quantity = parseFloat(item.querySelector('.work-quantity').value.replace(/,/g, '')) || 0;
+        const price = parseFloat(item.querySelector('.work-price').value.replace(/,/g, '')) || 0;
         total += quantity * price;
     });
 
@@ -203,22 +204,18 @@ function addWorkItem(itemData = null) {
     newItem.className = 'work-item';
     
     const name = itemData ? itemData.name : '';
-    const quantity = itemData ? itemData.quantity : '';
+    const quantity = itemData && itemData.quantity ? Number(itemData.quantity).toLocaleString() : '';
     const unit = itemData ? itemData.unit : '';
-    const price = itemData ? itemData.price : '';
+    const price = itemData && itemData.price ? Number(itemData.price).toLocaleString() : '';
 
     newItem.innerHTML = `
         <input type="text" placeholder="공사 항목" class="work-name" value="${name}">
-        <input type="number" placeholder="수량" class="work-quantity" value="${quantity}">
+        <input type="text" placeholder="수량" class="work-quantity" value="${quantity}" oninput="formatNumberInput(this); updateTotalAmount();">
         <input type="text" placeholder="단위" class="work-unit" value="${unit}">
-        <input type="number" placeholder="단가" class="work-price" value="${price}">
+        <input type="text" placeholder="단가" class="work-price" value="${price}" oninput="formatNumberInput(this); updateTotalAmount();">
         <button onclick="removeWorkItem(this)">삭제</button>
     `;
     workItemsContainer.appendChild(newItem);
-
-    newItem.querySelectorAll('.work-quantity, .work-price').forEach(input => {
-        input.addEventListener('input', updateTotalAmount);
-    });
 }
 
 function showFontGuide() {
@@ -300,9 +297,9 @@ async function generatePDF() {
         const workItems = [];
         document.querySelectorAll('#workItems .work-item').forEach(item => {
             const name = item.querySelector('.work-name').value;
-            const quantity = item.querySelector('.work-quantity').value;
+            const quantity = item.querySelector('.work-quantity').value.replace(/,/g, '');
             const unit = item.querySelector('.work-unit').value;
-            const price = item.querySelector('.work-price').value;
+            const price = item.querySelector('.work-price').value.replace(/,/g, '');
             if (name) {
                 workItems.push({ name, quantity, unit, price });
             }
@@ -405,9 +402,9 @@ function saveEstimate(showAlert = false) {
 
     document.querySelectorAll('#workItems .work-item').forEach(item => {
         const name = item.querySelector('.work-name').value;
-        const quantity = item.querySelector('.work-quantity').value;
+        const quantity = item.querySelector('.work-quantity').value.replace(/,/g, '');
         const unit = item.querySelector('.work-unit').value;
-        const price = item.querySelector('.work-price').value;
+        const price = item.querySelector('.work-price').value.replace(/,/g, '');
         if (name) {
             customer.workItems.push({ name, quantity, unit, price });
         }
@@ -544,7 +541,8 @@ function viewEstimateDetails(event, customerId) {
 }
 
 function clearEstimateForm() {
-    document.getElementById('estimatePage').querySelector('form').reset();
+    const form = document.querySelector('#estimatePage .form-container');
+    form.reset();
     document.getElementById('workItems').innerHTML = '';
     addWorkItem();
     document.getElementById('estimateDate').value = new Date().toISOString().split('T')[0];
@@ -564,6 +562,16 @@ function formatPhoneNumber(input) {
         input.value = `${value.substring(0, 3)}-${value.substring(3)}`;
     } else {
         input.value = value;
+    }
+}
+
+function formatNumberInput(input) {
+    if (!input) return;
+    let value = input.value.replace(/[^0-9]/g, ''); // 숫자 이외의 문자 제거
+    if (value) {
+        input.value = parseInt(value, 10).toLocaleString('ko-KR');
+    } else {
+        input.value = '';
     }
 }
 
@@ -690,3 +698,4 @@ window.closePdfActionModal = closePdfActionModal;
 window.downloadPDF = downloadPDF;
 window.sharePDF = sharePDF;
 window.clearAllData = clearAllData;
+window.formatNumberInput = formatNumberInput;
