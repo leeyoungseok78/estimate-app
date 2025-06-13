@@ -7,6 +7,9 @@ let generatedPdfDoc = null;
 let generatedPdfFile = null;
 let generatedPdfSiteName = '';
 
+// 폰트 데이터 캐싱을 위한 변수
+let nanumGothicFont = null;
+
 // 페이지 전환 함수
 function showPage(pageName) {
     document.querySelectorAll('.container').forEach(page => page.classList.remove('active'));
@@ -225,21 +228,61 @@ function showFontGuide() {
 function closeFontGuideModal() {
     document.getElementById('fontGuideModal').style.display = 'none';
 }
-    
-function loadSavedFontData() {
-    if (window.font) {
-        updateFontStatus(true, '내장 폰트가 성공적으로 로드되었습니다.');
-    } else {
-        updateFontStatus(false, '내장 폰트를 로드할 수 없습니다.');
+
+// Base64 인코딩을 위한 헬퍼 함수
+function arrayBufferToBase64(buffer) {
+    let binary = '';
+    const bytes = new Uint8Array(buffer);
+    const len = bytes.byteLength;
+    for (let i = 0; i < len; i++) {
+        binary += String.fromCharCode(bytes[i]);
+    }
+    return window.btoa(binary);
+}
+
+// 폰트 로드 함수
+async function loadFont() {
+    if (nanumGothicFont) {
+        return; // 이미 로드되었으면 함수 종료
+    }
+
+    const loadingOverlay = document.getElementById('loadingOverlay');
+    const originalText = loadingOverlay.querySelector('p').textContent;
+    loadingOverlay.querySelector('p').textContent = '최초 실행 시 폰트를 로딩합니다. 잠시만 기다려주세요...';
+    loadingOverlay.style.display = 'flex';
+
+    try {
+        const response = await fetch('./fonts/NanumGothic.ttf');
+        if (!response.ok) {
+            throw new Error('폰트 파일을 불러오는 데 실패했습니다.');
+        }
+        const fontBuffer = await response.arrayBuffer();
+        nanumGothicFont = arrayBufferToBase64(fontBuffer);
+    } catch (error) {
+        console.error(error);
+        alert(error.message);
+        throw error; // 에러를 다시 던져서 PDF 생성 중단
+    } finally {
+        loadingOverlay.style.display = 'none';
+        loadingOverlay.querySelector('p').textContent = originalText;
     }
 }
 
 async function generatePDF() {
-    // PDF 생성 로직을 폰트 관련 코드 없이 실행하도록 수정
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF();
-    
+    const loadingOverlay = document.getElementById('loadingOverlay');
     try {
+        await loadFont(); // 폰트 로드 (필요한 경우)
+
+        loadingOverlay.style.display = 'flex';
+
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+        
+        // 폰트 추가 및 설정
+        doc.addFileToVFS('NanumGothic.ttf', nanumGothicFont);
+        doc.addFont('NanumGothic.ttf', 'NanumGothic', 'normal');
+        doc.setFont('NanumGothic');
+
         // --- 데이터 수집 ---
         const companyName = document.getElementById('companyName').value;
         const manager = document.getElementById('manager').value;
@@ -265,36 +308,39 @@ async function generatePDF() {
             }
         });
 
-        // --- PDF 내용 생성 (한글 깨짐 이슈는 일단 무시) ---
-        // 기본 폰트는 한글을 지원하지 않으므로, 일단 영문과 숫자로 테스트
+        // --- PDF 내용 생성 (한글로 복원) ---
         doc.setFontSize(22);
-        doc.text("Estimate", 105, 20, { align: 'center' }); // Title in English
+        doc.text("견 적 서", 105, 20, { align: 'center' });
         
         doc.setFontSize(10);
-        doc.text(`Estimate Date: ${estimateDate}`, 195, 30, { align: 'right' });
+        doc.text(`견적일: ${estimateDate}`, 195, 30, { align: 'right' });
 
         doc.autoTable({
             startY: 35,
-            head: [['Supplier Information']],
+            head: [['공급자 (회사 정보)']],
             body: [
-                [`Company: ${companyName}`],
-                [`Manager: ${manager}`],
-                [`Phone: ${phone}`],
-                [`Address: ${address}`]
+                [`회사명: ${companyName}`],
+                [`담당자: ${manager}`],
+                [`연락처: ${phone}`],
+                [`주소: ${address}`]
             ],
-            theme: 'grid'
+            theme: 'grid',
+            styles: { font: 'NanumGothic', fontStyle: 'normal' },
+            headStyles: { font: 'NanumGothic', fontStyle: 'bold' }
         });
         
         doc.autoTable({
-            head: [['Customer Information']],
+            head: [['공급받는 자 (고객 정보)']],
             body: [
-                [`Site Name: ${siteName}`],
-                [`Customer: ${customerName}`],
-                [`Phone: ${customerPhone}`],
-                [`Work Address: ${workAddress}`],
-                [`Deadline: ${deadlineDate || 'None'}`]
+                [`현장명: ${siteName}`],
+                [`고객명: ${customerName}`],
+                [`연락처: ${customerPhone}`],
+                [`공사 주소: ${workAddress}`],
+                [`제출 마감일: ${deadlineDate || '없음'}`]
             ],
-            theme: 'grid'
+            theme: 'grid',
+            styles: { font: 'NanumGothic', fontStyle: 'normal' },
+            headStyles: { font: 'NanumGothic', fontStyle: 'bold' }
         });
         
         const workItemsBody = workItems.map((item, index) => [
@@ -304,21 +350,23 @@ async function generatePDF() {
         ]);
         
         doc.autoTable({
-            head: [['No.', 'Work Item', 'Qty', 'Unit', 'Unit Price', 'Amount']],
+            head: [['No.', '공사 항목', '수량', '단위', '단가', '금액']],
             body: workItemsBody,
-            headStyles: { halign: 'center' }
+            headStyles: { halign: 'center', font: 'NanumGothic', fontStyle: 'bold' },
+            styles: { font: 'NanumGothic', fontStyle: 'normal' }
         });
         
         const finalY = doc.autoTable.previous.finalY;
         doc.setFontSize(12);
-        doc.text(`Total Amount: ${totalAmount}`, 195, finalY + 10, { align: 'right' });
+        doc.text(`총 견적 금액: ${totalAmount}`, 195, finalY + 10, { align: 'right' });
         
         doc.setFontSize(10);
-        doc.text("Notes", 14, finalY + 20);
+        doc.text("특이사항", 14, finalY + 20);
         doc.autoTable({
             startY: finalY + 22,
-            body: [[notes || 'None']],
-            theme: 'plain'
+            body: [[notes || '없음']],
+            theme: 'plain',
+            styles: { font: 'NanumGothic' }
         });
 
         const pdfBlob = doc.output('blob');
@@ -332,7 +380,9 @@ async function generatePDF() {
 
     } catch(e) {
         console.error("PDF 생성 중 오류 발생:", e);
-        alert("PDF를 생성하는 중에 오류가 발생했습니다. 개발자 콘솔을 확인해주세요.");
+        // 오류가 발생했더라도 로딩 오버레이는 숨김
+    } finally {
+        loadingOverlay.style.display = 'none';
     }
 }
 
