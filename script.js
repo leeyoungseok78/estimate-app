@@ -424,7 +424,7 @@ async function generatePDF() {
                 ['주소', address]
             ],
             theme: 'grid',
-            styles: { font: 'NanumGothic', fontStyle: 'normal' },
+            styles: { font: 'NanumGothic', fontStyle: 'normal', fontSize: 10 },
             headStyles: { 
                 font: 'NanumGothic', 
                 fontStyle: 'bold',
@@ -453,7 +453,7 @@ async function generatePDF() {
                 ['제출 마감일', deadlineDate || '없음']
             ],
             theme: 'grid',
-            styles: { font: 'NanumGothic', fontStyle: 'normal' },
+            styles: { font: 'NanumGothic', fontStyle: 'normal', fontSize: 10 },
             headStyles: { 
                 font: 'NanumGothic', 
                 fontStyle: 'bold',
@@ -484,8 +484,8 @@ async function generatePDF() {
         });
         
         const finalY = doc.autoTable.previous.finalY;
-        doc.setFontSize(12);
-        doc.text(`총 견적 금액: ${totalAmount}`, 195, finalY + 10, { align: 'right' });
+        doc.setFontSize(14);
+        doc.text(`(VAT 별도) 총 견적금액 : ${totalAmount}`, 195, finalY + 10, { align: 'right' });
         
         doc.setFontSize(10);
         doc.text("특이사항", 14, finalY + 20);
