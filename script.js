@@ -428,7 +428,8 @@ async function generatePDF() {
             headStyles: { 
                 font: 'NanumGothic', 
                 fontStyle: 'bold',
-                fillColor: [240, 240, 240]
+                fillColor: [240, 240, 240],
+                textColor: [0, 0, 0]
             },
             margin: { right: pageWidth - margin - halfWidth + 2 },
             didParseCell: function (data) {
@@ -457,7 +458,8 @@ async function generatePDF() {
             headStyles: { 
                 font: 'NanumGothic', 
                 fontStyle: 'bold',
-                fillColor: [220, 230, 240]
+                fillColor: [220, 230, 240],
+                textColor: [0, 0, 0]
             },
             margin: { left: margin + halfWidth - 2},
             didParseCell: function (data) {
