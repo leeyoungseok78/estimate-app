@@ -381,7 +381,7 @@ async function generatePDF() {
         const companyName = document.getElementById('companyName').value;
         const manager = document.getElementById('manager').value;
         const phone = document.getElementById('phone').value;
-        const companyInfo = JSON.parse(localStorage.getItem('companyInfo')) || {};
+        const companyInfo = await loadData(STORES.COMPANY, 'main') || {};
         const address = companyInfo.address || '';
         const siteName = document.getElementById('siteName').value;
         const customerName = document.getElementById('customerName').value;
@@ -410,33 +410,63 @@ async function generatePDF() {
         doc.setFontSize(10);
         doc.text(`견적일: ${estimateDate}`, 195, 30, { align: 'right' });
 
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const margin = 14;
+        const halfWidth = (pageWidth - margin * 2) / 2;
+
         doc.autoTable({
             startY: 35,
             head: [['공급자 (회사 정보)']],
             body: [
-                [`회사명: ${companyName}`],
-                [`담당자: ${manager}`],
-                [`연락처: ${phone}`],
-                [`주소: ${address}`]
+                ['회사명', companyName],
+                ['담당자', manager],
+                ['연락처', phone],
+                ['주소', address]
             ],
             theme: 'grid',
             styles: { font: 'NanumGothic', fontStyle: 'normal' },
-            headStyles: { font: 'NanumGothic', fontStyle: 'bold' }
+            headStyles: { 
+                font: 'NanumGothic', 
+                fontStyle: 'bold',
+                fillColor: [240, 240, 240]
+            },
+            margin: { right: pageWidth - margin - halfWidth + 2 },
+            didParseCell: function (data) {
+                data.cell.styles.halign = 'left';
+                if (data.section === 'body' && data.row.index === 2 && data.column.index === 1) { // 연락처 값
+                    data.cell.styles.fontStyle = 'bold';
+                    data.cell.styles.fontSize = 11;
+                }
+            }
         });
         
+        const supplierTableFinalY = doc.autoTable.previous.finalY;
+        
         doc.autoTable({
+            startY: 35,
             head: [['공급받는 자 (고객 정보)']],
             body: [
-                [`현장명: ${siteName}`],
-                [`고객명: ${customerName}`],
-                [`연락처: ${customerPhone}`],
-                [`공사 주소: ${workAddress}`],
-                [`제출 마감일: ${deadlineDate || '없음'}`]
+                ['현장명', siteName],
+                ['고객명', customerName],
+                ['연락처', customerPhone],
+                ['공사 주소', workAddress],
+                ['제출 마감일', deadlineDate || '없음']
             ],
             theme: 'grid',
             styles: { font: 'NanumGothic', fontStyle: 'normal' },
-            headStyles: { font: 'NanumGothic', fontStyle: 'bold' }
+            headStyles: { 
+                font: 'NanumGothic', 
+                fontStyle: 'bold',
+                fillColor: [220, 230, 240]
+            },
+            margin: { left: margin + halfWidth - 2},
+            didParseCell: function (data) {
+                data.cell.styles.halign = 'left';
+            }
         });
+
+        const customerTableFinalY = doc.autoTable.previous.finalY;
+        const workItemsTableStartY = Math.max(supplierTableFinalY, customerTableFinalY) + 5;
         
         const workItemsBody = workItems.map((item, index) => [
             index + 1, item.name, item.quantity || '0', item.unit,
@@ -445,10 +475,12 @@ async function generatePDF() {
         ]);
         
         doc.autoTable({
+            startY: workItemsTableStartY,
             head: [['No.', '공사 항목', '수량', '단위', '단가', '금액']],
             body: workItemsBody,
-            headStyles: { halign: 'center', font: 'NanumGothic', fontStyle: 'bold' },
-            styles: { font: 'NanumGothic', fontStyle: 'normal' }
+            headStyles: { halign: 'center', font: 'NanumGothic', fontStyle: 'bold', fontSize: 11 },
+            styles: { font: 'NanumGothic', fontStyle: 'normal', fontSize: 10 },
+            alternateRowStyles: { fillColor: [248, 249, 250] }
         });
         
         const finalY = doc.autoTable.previous.finalY;
