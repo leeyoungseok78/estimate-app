@@ -505,7 +505,15 @@ async function generatePDF() {
             body: workItemsBody,
             headStyles: { halign: 'center', font: 'NanumGothic', fontStyle: 'bold', fontSize: 11 },
             styles: { font: 'NanumGothic', fontStyle: 'normal', fontSize: 10 },
-            alternateRowStyles: { fillColor: [248, 249, 250] }
+            alternateRowStyles: { fillColor: [248, 249, 250] },
+            columnStyles: {
+                0: { halign: 'center' }, // No. - 가운데 정렬
+                1: { halign: 'center' }, // 공사 항목 - 가운데 정렬
+                2: { halign: 'center' }, // 수량 - 가운데 정렬
+                3: { halign: 'center' }, // 단위 - 가운데 정렬
+                4: { halign: 'right' },  // 단가 - 오른쪽 정렬
+                5: { halign: 'right' }   // 금액 - 오른쪽 정렬
+            }
         });
         
         const finalY = doc.autoTable.previous.finalY;
