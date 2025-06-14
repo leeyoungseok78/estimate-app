@@ -514,7 +514,6 @@ async function generatePDF() {
         loadingOverlay.style.display = 'none';
     }
 }
-
 async function saveEstimate(showAlert = false) {
     const customer = {
         id: document.getElementById('editingEstimateId').value || 'customer-' + Date.now(),
@@ -739,7 +738,7 @@ async function exportData() {
         a.download = `estimate_backup_${date}.json`;
         a.click();
         URL.revokeObjectURL(url);
-        alert('데이터가 성공적으로 내보내졌습니다.');
+        alert(`데이터가 '다운로드' 폴더에 ${a.download} 파일로 저장되었습니다.`);
     } catch (error) {
         console.error('데이터 내보내기 실패:', error);
         alert('데이터 내보내기에 실패했습니다.');
