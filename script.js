@@ -414,14 +414,24 @@ async function generatePDF() {
         const margin = 14;
         const halfWidth = (pageWidth - margin * 2) / 2;
 
+        // 데이터 유효성 확인
+        if (!companyName && !siteName && !customerName) {
+            alert('⚠️ PDF 생성을 위해 최소한 회사명, 현장명, 또는 고객명 중 하나는 입력해주세요.');
+            return;
+        }
+
+        // 공급자 (회사 정보) 섹션 제목
+        doc.setFontSize(12);
+        doc.text("공급자 (회사 정보)", margin, 40);
+
         doc.autoTable({
-            startY: 35,
-            head: [['공급자 (회사 정보)']],
+            startY: 45,
+            head: [['항목', '정보']],
             body: [
-                ['회사명', companyName],
-                ['담당자', manager],
-                ['연락처', phone],
-                ['주소', address]
+                ['회사명', companyName || '미입력'],
+                ['담당자', manager || '미입력'],
+                ['연락처', phone || '미입력'],
+                ['주소', address || '미입력']
             ],
             theme: 'grid',
             styles: { font: 'NanumGothic', fontStyle: 'normal', fontSize: 10 },
@@ -429,11 +439,15 @@ async function generatePDF() {
                 font: 'NanumGothic', 
                 fontStyle: 'bold',
                 fillColor: [240, 240, 240],
-                textColor: [0, 0, 0]
+                textColor: [0, 0, 0],
+                halign: 'center'
             },
             margin: { right: pageWidth - margin - halfWidth + 2 },
+            columnStyles: {
+                0: { fontStyle: 'bold', fillColor: [248, 249, 250], halign: 'center', cellWidth: 25 },
+                1: { halign: 'left' }
+            },
             didParseCell: function (data) {
-                data.cell.styles.halign = 'left';
                 if (data.section === 'body' && data.row.index === 2 && data.column.index === 1) { // 연락처 값
                     data.cell.styles.fontStyle = 'bold';
                     data.cell.styles.fontSize = 11;
@@ -443,14 +457,18 @@ async function generatePDF() {
         
         const supplierTableFinalY = doc.autoTable.previous.finalY;
         
+        // 공급받는 자 (고객 정보) 섹션 제목
+        doc.setFontSize(12);
+        doc.text("공급받는 자 (고객 정보)", margin + halfWidth - 2, 40);
+        
         doc.autoTable({
-            startY: 35,
-            head: [['공급받는 자 (고객 정보)']],
+            startY: 45,
+            head: [['항목', '정보']],
             body: [
-                ['현장명', siteName],
-                ['고객명', customerName],
-                ['연락처', customerPhone],
-                ['공사 주소', workAddress],
+                ['현장명', siteName || '미입력'],
+                ['고객명', customerName || '미입력'],
+                ['연락처', customerPhone || '미입력'],
+                ['공사 주소', workAddress || '미입력'],
                 ['제출 마감일', deadlineDate || '없음']
             ],
             theme: 'grid',
@@ -459,9 +477,14 @@ async function generatePDF() {
                 font: 'NanumGothic', 
                 fontStyle: 'bold',
                 fillColor: [220, 230, 240],
-                textColor: [0, 0, 0]
+                textColor: [0, 0, 0],
+                halign: 'center'
             },
             margin: { left: margin + halfWidth - 2},
+            columnStyles: {
+                0: { fontStyle: 'bold', fillColor: [248, 249, 250], halign: 'center', cellWidth: 25 },
+                1: { halign: 'left' }
+            },
             didParseCell: function (data) {
                 data.cell.styles.halign = 'left';
             }
@@ -727,51 +750,105 @@ async function exportData() {
         const companyInfo = await loadData(STORES.COMPANY, 'main');
         const customers = await loadData(STORES.CUSTOMERS);
         
-        const data = { companyInfo, customers };
+        const data = { 
+            version: '1.0',
+            exportDate: new Date().toISOString(),
+            companyInfo, 
+            customers 
+        };
         
         const dataStr = JSON.stringify(data, null, 2);
         const blob = new Blob([dataStr], {type: "application/json"});
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        const date = new Date().toISOString().slice(0,10).replace(/-/g,"");
-        a.download = `estimate_backup_${date}.json`;
+        
+        // 더 명확한 파일명 생성
+        const now = new Date();
+        const dateStr = now.toISOString().slice(0,10).replace(/-/g,"");
+        const timeStr = now.toTimeString().slice(0,5).replace(/:/g,"");
+        const companyNamePart = companyInfo?.name ? `_${companyInfo.name.replace(/[^가-힣a-zA-Z0-9]/g, '')}` : '';
+        
+        a.download = `철거견적서백업_${dateStr}_${timeStr}${companyNamePart}.json`;
         a.click();
         URL.revokeObjectURL(url);
-        alert(`데이터가 '다운로드' 폴더에 ${a.download} 파일로 저장되었습니다.`);
+        
+        alert(`✅ 데이터 내보내기 완료!\n\n📁 파일명: ${a.download}\n💾 저장위치: 다운로드 폴더\n\n💡 팁: 파일을 안전한 곳에 백업해두세요!`);
     } catch (error) {
         console.error('데이터 내보내기 실패:', error);
-        alert('데이터 내보내기에 실패했습니다.');
+        alert('❌ 데이터 내보내기에 실패했습니다.');
     }
 }
 
 function importData() {
-    document.getElementById('importFile').click();
+    // 사용자에게 안내 메시지 표시
+    const proceed = confirm('📂 데이터 불러오기\n\n다운로드 폴더에서 백업 파일(.json)을 선택하세요.\n\n⚠️ 주의: 현재 데이터가 모두 교체됩니다.');
+    if (proceed) {
+        document.getElementById('importFile').click();
+    }
 }
 
 async function handleFileImport(event) {
     const file = event.target.files[0];
     if (!file) return;
 
+    // 파일 확장자 검사
+    if (!file.name.toLowerCase().endsWith('.json')) {
+        alert('❌ JSON 파일만 업로드 가능합니다.\n\n올바른 백업 파일을 선택해주세요.');
+        event.target.value = '';
+        return;
+    }
+
     const reader = new FileReader();
     reader.onload = async function(e) {
         try {
             const data = JSON.parse(e.target.result);
-            if (confirm('데이터를 불러오면 현재 모든 데이터가 덮어씌워집니다. 계속하시겠습니까?')) {
-                if(data.companyInfo) await saveData(STORES.COMPANY, data.companyInfo);
-                if(data.customers && Array.isArray(data.customers)) {
-                    const transaction = db.transaction(STORES.CUSTOMERS, 'readwrite');
-                    const store = transaction.objectStore(STORES.CUSTOMERS);
-                    await store.clear();
-                    for (const customer of data.customers) {
-                        await store.put(customer);
+            
+            // 파일 유효성 검사
+            if (!data.companyInfo && !data.customers) {
+                throw new Error('올바르지 않은 백업 파일 형식입니다.');
+            }
+
+            // 백업 파일 정보 표시
+            let fileInfo = '📋 백업 파일 정보:\n\n';
+            if (data.exportDate) {
+                fileInfo += `📅 백업 생성일: ${new Date(data.exportDate).toLocaleString('ko-KR')}\n`;
+            }
+            if (data.companyInfo?.name) {
+                fileInfo += `🏢 회사명: ${data.companyInfo.name}\n`;
+            }
+            if (data.customers?.length) {
+                fileInfo += `👥 고객 수: ${data.customers.length}명\n`;
+            }
+            fileInfo += '\n⚠️ 현재 모든 데이터가 교체됩니다. 계속하시겠습니까?';
+
+            if (confirm(fileInfo)) {
+                const loadingOverlay = document.getElementById('loadingOverlay');
+                loadingOverlay.querySelector('p').textContent = '데이터를 불러오는 중입니다...';
+                loadingOverlay.style.display = 'flex';
+
+                try {
+                    if(data.companyInfo) await saveData(STORES.COMPANY, data.companyInfo);
+                    if(data.customers && Array.isArray(data.customers)) {
+                        const transaction = db.transaction(STORES.CUSTOMERS, 'readwrite');
+                        const store = transaction.objectStore(STORES.CUSTOMERS);
+                        await store.clear();
+                        for (const customer of data.customers) {
+                            await store.put(customer);
+                        }
                     }
+                    
+                    loadingOverlay.style.display = 'none';
+                    alert('✅ 데이터를 성공적으로 불러왔습니다!\n\n페이지를 새로고침합니다.');
+                    location.reload();
+                } catch (importError) {
+                    loadingOverlay.style.display = 'none';
+                    throw importError;
                 }
-                alert('데이터를 성공적으로 불러왔습니다. 페이지를 새로고침합니다.');
-                location.reload();
             }
         } catch (error) {
-            alert('데이터 파일이 손상되었거나 잘못된 형식입니다.');
+            console.error('파일 불러오기 오류:', error);
+            alert(`❌ 데이터 불러오기 실패\n\n오류 내용: ${error.message || '파일이 손상되었거나 잘못된 형식입니다.'}\n\n올바른 백업 파일을 선택해주세요.`);
         } finally {
             event.target.value = '';
         }
